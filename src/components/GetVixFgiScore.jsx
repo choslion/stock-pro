@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  motion,
   useSpring,
   useMotionValue,
   useTransform,
@@ -9,7 +8,7 @@ import {
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
 
-export default function ScoreGauge() {
+export default function GetVixFgiScore() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [displayScore, setDisplayScore] = useState("0.0");
@@ -47,7 +46,7 @@ export default function ScoreGauge() {
   if (loading) {
     return (
       <Card title="🔥 종합 점수">
-        <p className="text-gray-400">로딩 중...</p>
+        <p className="text-gray-400">⏳ 로딩 중...</p>
       </Card>
     );
   }
