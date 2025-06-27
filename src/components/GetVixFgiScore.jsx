@@ -109,8 +109,11 @@ export default function GetVixFgiScore() {
 
       <div className="w-full h-5 rounded-full bg-gray-700 overflow-hidden">
         <motion.div
-          className="h-full bg-blue-500"
-          style={{ width: smoothWidth }}
+          className="h-full rounded-full transition-all"
+          style={{
+            width: smoothWidth,
+            background: `linear-gradient(to right, #22c55e, #eab308, #f97316, #ef4444)`,
+          }}
         />
       </div>
 
