@@ -20,7 +20,7 @@ export default function Tooltip({ content }) {
       <button
         aria-label="점수 의미 툴팁 열기"
         onClick={() => setOpen(!open)}
-        className="text-amber-300 bg-red-600 hover:bg-red-500 text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold shadow-md"
+        className="text-white bg-blue-600 hover:bg-blue-500 text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold shadow-md"
       >
         ?
       </button>
