@@ -31,9 +31,9 @@ export default function Vix() {
   if (!data)
     return (
       <Card title="📉 VIX (변동성 지수)">
-        <p className="text-gray-400">
+        <div className="text-gray-400">
           <Spin />
-        </p>
+        </div>
       </Card>
     );
 
