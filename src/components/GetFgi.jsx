@@ -64,7 +64,7 @@ export default function GetFgi() {
       <div>
         <p className="text-base">📈 점수</p>
         <div className="text-3xl font-extrabold text-center text-blue-300">
-          {data.value}
+          {data.value.toFixed(2)}
         </div>
       </div>
     </Card>
