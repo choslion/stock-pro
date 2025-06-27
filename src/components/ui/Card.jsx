@@ -9,9 +9,9 @@ export default function Card({ title, titleTooltip, children }) {
     (children && typeof children === "object" && "props" in children);
 
   return (
-    <div className="bg-gray-800 p-5 rounded-2xl shadow-md space-y-3">
+    <div className="bg-gray-800 p-5 rounded-2xl shadow-md transition duration-200 hover:shadow-xl hover:ring-1 hover:ring-blue-400">
       {title && (
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-3">
           {title}
           {titleTooltip && <Tooltip content={titleTooltip} />}
         </h3>

@@ -8,6 +8,7 @@ import {
 } from "framer-motion";
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
+import Spin from "./ui/Spin";
 import ScoreTooltipContent from "./ui/ScroeTooltipContent";
 
 // 점수 해석 메타 정보 함수
@@ -83,7 +84,9 @@ export default function GetVixFgiScore() {
   if (loading) {
     return (
       <Card title="🔥 종합 점수">
-        <p className="text-gray-400">⏳ 로딩 중...</p>
+        <p className="text-gray-400">
+          <Spin />
+        </p>
       </Card>
     );
   }
@@ -104,7 +107,7 @@ export default function GetVixFgiScore() {
     >
       <div className="text-center text-3xl font-bold text-blue-400 mb-3">
         {displayScore}
-        <span className="text-xl text-blue-200">점</span>
+        <span className="text-xl text-blue-200"> 점</span>
       </div>
 
       <div className="w-full h-5 rounded-full bg-gray-700 overflow-hidden">

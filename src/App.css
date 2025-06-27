@@ -1,3 +1,29 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer utilities {
+  .dot {
+    display: inline-block;
+    animation: blink 1.4s infinite;
+  }
+
+  .delay-100 {
+    animation-delay: 0.2s;
+  }
+
+  .delay-200 {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes blink {
+    0%,
+    80%,
+    100% {
+      opacity: 0;
+    }
+    40% {
+      opacity: 1;
+    }
+  }
+}

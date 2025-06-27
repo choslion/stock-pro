@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
+import Spin from "./ui/Spin";
 
 const formatDate = (isoDateStr) =>
   new Date(isoDateStr).toLocaleDateString("ko-KR", {
@@ -38,7 +39,9 @@ export default function GetFgi() {
   if (!data)
     return (
       <Card title="🧭 FGI (공포 & 탐욕 지수)">
-        <p className="text-gray-400">⏳ 로딩 중...</p>
+        <p className="text-gray-400">
+          <Spin />
+        </p>
       </Card>
     );
 
