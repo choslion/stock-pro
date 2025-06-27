@@ -7,8 +7,8 @@ import GetVixFgiScore from "./GetVixFgiScore";
 export default function StockIndexDashboard() {
   return (
     <div className="min-h-screen bg-gray-950 text-white p-4 sm:p-6 md:p-10">
-      <h1 className="text-3xl sm:text-4xl font-bold mb-8 text-center">
-        📊 택현님의 욕심
+      <h1 className="text-3xl sm:text-3xl font-bold my-8 text-center">
+        📊 택현님의 희망
       </h1>
 
       {/* 카드 2개씩 배치 - 반응형 */}
