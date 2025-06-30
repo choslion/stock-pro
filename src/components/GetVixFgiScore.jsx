@@ -8,13 +8,6 @@ import {
 } from "framer-motion";
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
-<<<<<<< HEAD
-
-export default function ScoreGauge() {
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [displayScore, setDisplayScore] = useState("0.0");
-=======
 import Spin from "./ui/Spin";
 import ScoreTooltipContent from "./ui/ScroeTooltipContent";
 
@@ -58,7 +51,6 @@ export default function GetVixFgiScore() {
   const [loading, setLoading] = useState(true);
   const [displayScore, setDisplayScore] = useState("0.0");
   const [meta, setMeta] = useState(null);
->>>>>>> main
 
   const scoreMotion = useMotionValue(0);
   const smoothScore = useSpring(scoreMotion, { stiffness: 70, damping: 20 });
@@ -69,19 +61,11 @@ export default function GetVixFgiScore() {
       .get("/score")
       .then((res) => {
         const target = res?.data?.score || 0;
-<<<<<<< HEAD
-        // 슈웅~ 올라가는 애니메이션
-        animate(scoreMotion, target, {
-          duration: 1,
-          ease: [0.22, 1, 0.36, 1], // easeOutCubic 스타일
-        });
-=======
         animate(scoreMotion, target, {
           duration: 1,
           ease: [0.22, 1, 0.36, 1],
         });
         setMeta(getScoreMeta(target));
->>>>>>> main
         setLoading(false);
       })
       .catch((err) => {
@@ -90,10 +74,6 @@ export default function GetVixFgiScore() {
       });
   }, []);
 
-<<<<<<< HEAD
-  // 숫자 텍스트 업데이트
-=======
->>>>>>> main
   useEffect(() => {
     const unsubscribe = smoothScore.on("change", (v) => {
       setDisplayScore(v.toFixed(1));
@@ -104,11 +84,7 @@ export default function GetVixFgiScore() {
   if (loading) {
     return (
       <Card title="🔥 종합 점수">
-<<<<<<< HEAD
-        <p className="text-gray-400">로딩 중...</p>
-=======
         <Spin />
->>>>>>> main
       </Card>
     );
   }
@@ -122,12 +98,6 @@ export default function GetVixFgiScore() {
   }
 
   return (
-<<<<<<< HEAD
-    <Card title="🔥 종합 점수" className="max-w-md">
-      <div className="text-center text-3xl font-bold text-blue-400 mb-3">
-        {displayScore}
-        <span className="text-xl text-blue-200">점</span>
-=======
     <Card
       title="🔥 종합 점수"
       titleTooltip={<ScoreTooltipContent />}
@@ -136,19 +106,10 @@ export default function GetVixFgiScore() {
       <div className="text-center text-3xl font-bold text-blue-400 mb-3">
         {displayScore}
         <span className="text-xl text-blue-200"> 점</span>
->>>>>>> main
       </div>
 
       <div className="w-full h-5 rounded-full bg-gray-700 overflow-hidden">
         <motion.div
-<<<<<<< HEAD
-          className="h-full bg-blue-500"
-          style={{ width: smoothWidth }}
-        />
-      </div>
-
-      <p className="text-sm text-gray-400 mt-2 text-center">
-=======
           className="h-full rounded-full transition-all"
           style={{
             width: smoothWidth,
@@ -166,7 +127,6 @@ export default function GetVixFgiScore() {
       )}
 
       <p className="text-sm text-gray-500 mt-3 text-center">
->>>>>>> main
         (최대 점수 100 기준)
       </p>
     </Card>

@@ -2,10 +2,7 @@
 import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axiosInstance"; // axios 인스턴스 가져오기
 import Card from "./ui/Card";
-<<<<<<< HEAD
-=======
 import Spin from "./ui/Spin";
->>>>>>> main
 import {
   LineChart,
   Line,

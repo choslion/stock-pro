@@ -2,10 +2,7 @@
 import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
-<<<<<<< HEAD
-=======
 import Spin from "./ui/Spin";
->>>>>>> main
 
 export default function Vix() {
   const [data, setData] = useState(null); // VIX 데이터
@@ -34,11 +31,7 @@ export default function Vix() {
   if (!data)
     return (
       <Card title="📉 VIX (변동성 지수)">
-<<<<<<< HEAD
-        <p className="text-gray-400">⏳ 로딩 중...</p>
-=======
         <Spin />
->>>>>>> main
       </Card>
     );
 
