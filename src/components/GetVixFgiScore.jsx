@@ -84,9 +84,7 @@ export default function GetVixFgiScore() {
   if (loading) {
     return (
       <Card title="🔥 종합 점수">
-        <div className="text-gray-400">
-          <Spin />
-        </div>
+        <Spin />
       </Card>
     );
   }

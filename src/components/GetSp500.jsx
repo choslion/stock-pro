@@ -1,7 +1,8 @@
 // components/GetSp500.jsx
 import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axiosInstance";
-import Card from "./ui/Card"; // 공통 카드 컴포넌트
+import Card from "./ui/Card";
+import Spin from "./ui/Spin";
 
 // 날짜 포맷 함수
 const formatDate = (dateStr) =>
@@ -35,8 +36,8 @@ export default function GetSp500() {
 
   if (!data)
     return (
-      <Card className="max-w-md text-gray-300">
-        ⏳ S&P500 데이터 불러오는 중...
+      <Card title="📈 S&P 500 정보">
+        <Spin />
       </Card>
     );
 

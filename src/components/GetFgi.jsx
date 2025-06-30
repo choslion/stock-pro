@@ -39,9 +39,7 @@ export default function GetFgi() {
   if (!data)
     return (
       <Card title="🧭 FGI (공포 & 탐욕 지수)">
-        <div className="text-gray-400">
-          <Spin />
-        </div>
+        <Spin />
       </Card>
     );
 
