@@ -112,9 +112,7 @@ export default function VixChart() {
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="text-center text-gray-400 text-sm mt-4">
-            ⏳ 데이터 불러오는 중...
-          </div>
+          <Spin />
         )}
       </div>
     </Card>
