@@ -19,14 +19,15 @@ export default function GetSp500() {
   useEffect(() => {
     // axios를 통한 API 호출
     axiosInstance
-      .get("https://stock-index-mg9x.onrender.com/api/market/sp500")
+      .get("https://stock-index-mg9x.onrender.com/api/market/sp5002")
       .then((res) => {
         const json = res.data;
         if (!json || !json.date) throw new Error("데이터 형식 오류");
         setData(json);
       })
       .catch((err) => {
-        // axios는 기본적으로 err.response 또는 err.message 포함
+        console.log(err.response);
+
         setError(err.response?.data?.message || err.message);
       });
   }, []);
