@@ -19,7 +19,7 @@ export default function GetSp500() {
   useEffect(() => {
     // axios를 통한 API 호출
     axiosInstance
-      .get("https://stock-index-mg9x.onrender.com/api/market/sp5002")
+      .get("https://stock-index-mg9x.onrender.com/api/market/sp500")
       .then((res) => {
         const json = res.data;
         if (!json || !json.date) throw new Error("데이터 형식 오류");
