@@ -23,27 +23,14 @@ export default function VixChart() {
   const [data, setData] = useState([]);
   const [error, setError] = useState("");
 
-  // VIX 범위 데이터 가져오는 함수
-  const fetchVixRange = async () => {
-    try {
-      const res = await axiosInstance.get(`/vix/range`, {
-        params: { start_date: startDate, end_date: endDate },
-      });
-
-      const parsed = res.data.map((d) => ({
-        date: d.date,
-        value: parseFloat(d.value),
-      }));
-
-      setData(parsed);
-    } catch (err) {
-      setError(err.response?.data?.message || err.message);
-    }
-  };
-
-  // 날짜 변경 시 데이터 재요청
   useEffect(() => {
-    fetchVixRange();
+    setError("");
+    axiosInstance
+      .get("/vix/range", { params: { start_date: startDate, end_date: endDate } })
+      .then((res) =>
+        setData(res.data.map((d) => ({ date: d.date, value: parseFloat(d.value) })))
+      )
+      .catch((err) => setError(err.response?.data?.message || err.message));
   }, [startDate, endDate]);
 
   return (
