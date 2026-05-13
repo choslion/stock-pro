@@ -2,5 +2,5 @@ fastapi==0.115.5
 uvicorn[standard]==0.32.1
 yfinance>=0.2.54
 httpx==0.28.1
-FinanceDataReader==0.9.93
+finance-datareader>=0.9.93
 pandas==2.2.3
