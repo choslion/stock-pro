@@ -27,6 +27,10 @@ dist-ssr
 .env
 .env.*        # .env.development, .env.local 등도 포함
 
+# Python
+__pycache__/
+*.pyc
+
 # 기타 민감 정보
 *.pem
 *.key
