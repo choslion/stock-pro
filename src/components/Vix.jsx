@@ -1,25 +1,28 @@
-// components/Vix.jsx
 import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 
-export default function Vix() {
-  const [data, setData] = useState(null); // VIX 데이터
-  const [error, setError] = useState(""); // 에러 메시지
+function getVixMeta(value) {
+  if (value < 15) return { label: "낮은 변동성 (안정)", color: "text-green-400" };
+  if (value < 25) return { label: "보통 변동성", color: "text-yellow-300" };
+  if (value < 35) return { label: "높은 변동성 (주의)", color: "text-orange-400" };
+  return { label: "극단적 변동성 (위험)", color: "text-red-400" };
+}
 
-  // 컴포넌트 마운트 시 API 호출
+export default function Vix() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+
   useEffect(() => {
     axiosInstance
-      .get("/vix") // baseURL은 axiosInstance에 정의되어 있음
+      .get("/vix")
       .then((res) => setData(res.data))
       .catch((err) => {
-        // 서버에서 응답이 있으면 그 메시지를, 없으면 기본 메시지 사용
         setError(err.response?.data?.message || err.message);
       });
   }, []);
 
-  // 에러 상태 UI
   if (error)
     return (
       <Card title="📉 VIX (변동성 지수)">
@@ -27,7 +30,6 @@ export default function Vix() {
       </Card>
     );
 
-  // 로딩 상태 UI
   if (!data)
     return (
       <Card title="📉 VIX (변동성 지수)">
@@ -35,17 +37,18 @@ export default function Vix() {
       </Card>
     );
 
-  // 정상 렌더링
+  const { label, color } = getVixMeta(parseFloat(data.value));
+
   return (
     <Card title="📉 VIX (변동성 지수)">
       <p className="text-sm text-gray-400">측정 날짜: {data.date}</p>
       <div className="flex justify-between items-center">
         <span className="text-base">현재 지수:</span>
-        <span className="text-2xl font-bold text-green-400">
+        <span className={`text-2xl font-bold ${color}`}>
           {parseFloat(data.value).toFixed(2)}
         </span>
       </div>
-      <p className="text-sm text-green-300 mt-2">● 낮은 변동성 (안정)</p>
+      <p className={`text-sm mt-2 ${color}`}>● {label}</p>
     </Card>
   );
 }
