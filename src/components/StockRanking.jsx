@@ -97,7 +97,9 @@ export default function StockRanking() {
 
             {data.length === 0 && (
               <p className="text-gray-500 text-center py-6 text-sm">
-                데이터가 없습니다.
+                {filter === "rising" || filter === "falling"
+                  ? "현재 해당 조건의 종목이 없습니다 (장 마감 또는 변동 없음)"
+                  : "데이터가 없습니다."}
               </p>
             )}
           </div>
