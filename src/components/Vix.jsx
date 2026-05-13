@@ -25,14 +25,14 @@ export default function Vix() {
 
   if (error)
     return (
-      <Card title="📉 VIX (변동성 지수)">
+      <Card title="🌊 시장 불안 지수" subtitle="CBOE Volatility Index (VIX)">
         <p className="text-red-400">❌ 에러 발생: {error}</p>
       </Card>
     );
 
   if (!data)
     return (
-      <Card title="📉 VIX (변동성 지수)">
+      <Card title="🌊 시장 불안 지수" subtitle="CBOE Volatility Index (VIX)">
         <Spin />
       </Card>
     );
@@ -40,7 +40,7 @@ export default function Vix() {
   const { label, color } = getVixMeta(parseFloat(data.value));
 
   return (
-    <Card title="📉 VIX (변동성 지수)">
+    <Card title="🌊 시장 불안 지수" subtitle="CBOE Volatility Index (VIX)">
       <p className="text-sm text-gray-400">측정 날짜: {data.date}</p>
       <div className="flex justify-between items-center">
         <span className="text-base">현재 지수:</span>

@@ -37,7 +37,7 @@ export default function GetSp500() {
 
   if (!data)
     return (
-      <Card title="📈 S&P 500 정보">
+      <Card title="📈 미국 증시 현황" subtitle="S&P 500 지수">
         <Spin />
       </Card>
     );
@@ -46,7 +46,7 @@ export default function GetSp500() {
   const deviationColor = isPositive ? "text-green-400" : "text-red-400";
 
   return (
-    <Card title="📈 S&P 500 정보" className="max-w-md">
+    <Card title="📈 미국 증시 현황" subtitle="S&P 500 지수" className="max-w-md">
       <p className="text-sm text-gray-400 mb-4">
         업데이트 날짜: {formatDate(data.date)}
       </p>
@@ -58,16 +58,24 @@ export default function GetSp500() {
             {data.current_value.toFixed(2)}
           </span>
         </div>
-        <div className="flex justify-between">
-          <span>200일 평균선</span>
+        <div className="flex justify-between items-start">
+          <div>
+            <p>200일 이동평균</p>
+            <p className="text-xs text-gray-500">최근 200거래일 평균 가격</p>
+          </div>
           <span className="font-semibold text-yellow-300">
             {data.ma200.toFixed(2)}
           </span>
         </div>
-        <div className="flex justify-between">
-          <span>괴리율</span>
+        <div className="flex justify-between items-start">
+          <div>
+            <p>평균 대비 차이</p>
+            <p className="text-xs text-gray-500">
+              {isPositive ? "평균보다 고평가 구간" : "평균보다 저평가 구간"}
+            </p>
+          </div>
           <span className={`font-semibold ${deviationColor}`}>
-            {data.deviation_percent.toFixed(2)}%
+            {isPositive ? "+" : ""}{data.deviation_percent.toFixed(2)}%
           </span>
         </div>
       </div>

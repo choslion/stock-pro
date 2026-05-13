@@ -83,7 +83,7 @@ export default function GetVixFgiScore() {
 
   if (loading) {
     return (
-      <Card title="🔥 종합 점수">
+      <Card title="🎯 지금 투자 타이밍인가요?" subtitle="VIX + FGI 기반 종합 점수">
         <Spin />
       </Card>
     );
@@ -91,7 +91,7 @@ export default function GetVixFgiScore() {
 
   if (error) {
     return (
-      <Card title="🔥 종합 점수">
+      <Card title="🎯 지금 투자 타이밍인가요?" subtitle="VIX + FGI 기반 종합 점수">
         <p className="text-red-400">❌ {error}</p>
       </Card>
     );
@@ -99,7 +99,7 @@ export default function GetVixFgiScore() {
 
   return (
     <Card
-      title="🔥 종합 점수"
+      title="🎯 지금 투자 타이밍인가요?" subtitle="VIX + FGI 기반 종합 점수"
       titleTooltip={<ScoreTooltipContent />}
       className="max-w-md"
     >

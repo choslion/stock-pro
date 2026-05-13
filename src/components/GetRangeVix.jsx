@@ -34,7 +34,7 @@ export default function VixChart() {
   }, [startDate, endDate]);
 
   return (
-    <Card title="🌪️ VIX (변동성 지수) 범위 차트" className="max-w-3xl">
+    <Card title="📊 변동성 변화 추이" subtitle="CBOE Volatility Index (VIX) 기간별 추이" className="max-w-3xl">
       {/* 날짜 선택 필드 */}
       <div className="flex flex-col sm:flex-row sm:justify-end gap-4 mb-4">
         <div className="flex items-center gap-2">

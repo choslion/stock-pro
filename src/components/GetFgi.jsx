@@ -31,14 +31,14 @@ export default function GetFgi() {
 
   if (error)
     return (
-      <Card title="🧭 FGI (공포 & 탐욕 지수)">
+      <Card title="😰 시장 심리 지수" subtitle="CNN Fear & Greed Index">
         <p className="text-red-400">에러 발생: {error}</p>
       </Card>
     );
 
   if (!data)
     return (
-      <Card title="🧭 FGI (공포 & 탐욕 지수)">
+      <Card title="😰 시장 심리 지수" subtitle="CNN Fear & Greed Index">
         <Spin />
       </Card>
     );
@@ -50,7 +50,7 @@ export default function GetFgi() {
   const descriptionColor = colorMap[data.description] || "text-yellow-300";
 
   return (
-    <Card title="🧭 FGI (공포 & 탐욕 지수)">
+    <Card title="😰 시장 심리 지수" subtitle="CNN Fear & Greed Index">
       <p className="text-sm text-gray-400 mb-2">
         업데이트 날짜: {formatDate(data.last_update)}
       </p>
