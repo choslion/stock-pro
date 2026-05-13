@@ -158,10 +158,26 @@ def get_score():
 def _get_listing(market: str) -> pd.DataFrame:
     mkt = {"ALL": "KRX", "KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ"}.get(market, "KRX")
     df = fdr.StockListing(mkt)
-    for col in ["Volume", "Amount", "ChgRatio", "Close"]:
+    for col in ["Volume", "Amount", "ChgRatio", "Close", "Prev", "Open"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df[df["Volume"].fillna(0) > 0].copy()
+
+    df = df[df["Volume"].fillna(0) > 0].copy()
+
+    # ChgRatio가 없거나 모두 0이면 Prev 또는 Open 기반으로 계산
+    has_chg = "ChgRatio" in df.columns and df["ChgRatio"].fillna(0).abs().sum() > 0
+    if not has_chg:
+        if "Prev" in df.columns and df["Prev"].fillna(0).sum() > 0:
+            prev = df["Prev"].replace(0, float("nan"))
+            df["ChgRatio"] = (df["Close"] - prev) / prev * 100
+        elif "Open" in df.columns and df["Open"].fillna(0).sum() > 0:
+            open_ = df["Open"].replace(0, float("nan"))
+            df["ChgRatio"] = (df["Close"] - open_) / open_ * 100
+        else:
+            df["ChgRatio"] = 0.0
+
+    df["ChgRatio"] = df["ChgRatio"].fillna(0.0)
+    return df
 
 
 @app.get("/stocks/ranking")
@@ -184,8 +200,12 @@ def get_stock_ranking(
         else:
             sorted_df = df.sort_values("Amount", ascending=False)
 
+        top = sorted_df.head(limit)
+        if top.empty:
+            return []
+
         result = []
-        for rank, (_, row) in enumerate(sorted_df.head(limit).iterrows(), 1):
+        for rank, (_, row) in enumerate(top.iterrows(), 1):
             result.append({
                 "rank": rank,
                 "ticker": str(row.get("Symbol", row.get("Code", ""))),
