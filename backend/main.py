@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 import httpx
 import pandas as pd
-from pykrx import stock as krx
-from datetime import datetime, timedelta
+import FinanceDataReader as fdr
+from datetime import datetime
 import time
 
 app = FastAPI()
@@ -34,18 +34,6 @@ def _get_cached(key: str, fetch_fn):
     return data
 
 
-def _latest_trading_date(market: str = "KOSPI") -> str:
-    """최근 거래일 조회 (주말·공휴일 건너뜀)"""
-    today = datetime.now()
-    for i in range(10):
-        d = (today - timedelta(days=i)).strftime("%Y%m%d")
-        try:
-            df = krx.get_market_ohlcv_by_ticker(d, market=market)
-            if not df.empty:
-                return d
-        except Exception:
-            pass
-    raise HTTPException(503, "최근 거래일을 찾을 수 없습니다.")
 
 
 # ── 기존 엔드포인트 ────────────────────────────────────────────────
@@ -133,6 +121,15 @@ async def get_score():
 
 # ── 국내 주식 신규 엔드포인트 ──────────────────────────────────────
 
+def _get_listing(market: str) -> pd.DataFrame:
+    mkt = {"ALL": "KRX", "KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ"}.get(market, "KRX")
+    df = fdr.StockListing(mkt)
+    for col in ["Volume", "Amount", "ChgRatio", "Close"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df[df["Volume"].fillna(0) > 0].copy()
+
+
 @app.get("/stocks/ranking")
 def get_stock_ranking(
     type: str = Query("amount"),   # amount | volume | rising | falling
@@ -140,35 +137,27 @@ def get_stock_ranking(
     limit: int = Query(10),
 ):
     def fetch():
-        date = _latest_trading_date("KOSPI")
-        markets = ["KOSPI", "KOSDAQ"] if market == "ALL" else [market]
-
-        frames = [krx.get_market_ohlcv_by_ticker(date, market=m) for m in markets]
-        combined = pd.concat([f for f in frames if not f.empty])
-        if combined.empty:
+        df = _get_listing(market)
+        if df.empty:
             raise HTTPException(503, "주식 데이터를 가져올 수 없습니다.")
 
         if type == "volume":
-            sorted_df = combined.sort_values("거래량", ascending=False)
+            sorted_df = df.sort_values("Volume", ascending=False)
         elif type == "rising":
-            sorted_df = combined[combined["등락률"] > 0].sort_values("등락률", ascending=False)
+            sorted_df = df[df["ChgRatio"] > 0].sort_values("ChgRatio", ascending=False)
         elif type == "falling":
-            sorted_df = combined[combined["등락률"] < 0].sort_values("등락률")
+            sorted_df = df[df["ChgRatio"] < 0].sort_values("ChgRatio")
         else:
-            sorted_df = combined.sort_values("거래대금", ascending=False)
+            sorted_df = df.sort_values("Amount", ascending=False)
 
         result = []
-        for rank, (ticker, row) in enumerate(sorted_df.head(limit).iterrows(), 1):
-            try:
-                name = krx.get_market_ticker_name(str(ticker))
-            except Exception:
-                name = str(ticker)
+        for rank, (_, row) in enumerate(sorted_df.head(limit).iterrows(), 1):
             result.append({
                 "rank": rank,
-                "ticker": str(ticker),
-                "name": name,
-                "price": int(row["종가"]),
-                "change_rate": round(float(row["등락률"]), 2),
+                "ticker": str(row.get("Symbol", row.get("Code", ""))),
+                "name": str(row.get("Name", "")),
+                "price": int(row["Close"]) if pd.notna(row.get("Close")) else 0,
+                "change_rate": round(float(row["ChgRatio"]), 2) if pd.notna(row.get("ChgRatio")) else 0.0,
             })
         return result
 
@@ -178,31 +167,32 @@ def get_stock_ranking(
 @app.get("/sectors")
 def get_sectors(market: str = Query("KOSPI")):
     def fetch():
-        date = _latest_trading_date(market)
-
-        sector_df = krx.get_market_sector_classifications(date, market=market)
-        ohlcv_df = krx.get_market_ohlcv_by_ticker(date, market=market)
-
-        if sector_df.empty or ohlcv_df.empty:
+        df = _get_listing(market)
+        if df.empty:
             raise HTTPException(503, "업종 데이터를 가져올 수 없습니다.")
 
-        merged = sector_df[["업종명"]].join(ohlcv_df[["등락률"]], how="inner")
+        sector_col = next((c for c in ["Sector", "Industry", "업종"] if c in df.columns), None)
+        if not sector_col:
+            raise HTTPException(503, "업종 정보가 없습니다.")
+
+        df = df[df[sector_col].notna() & (df[sector_col] != "")].copy()
 
         agg = (
-            merged.groupby("업종명")["등락률"]
+            df.groupby(sector_col)["ChgRatio"]
             .agg(
                 change_rate="mean",
                 total="count",
                 rising=lambda x: int((x > 0).sum()),
             )
             .reset_index()
+            .rename(columns={sector_col: "name"})
             .sort_values("change_rate", ascending=False)
         )
 
         return [
             {
-                "name": row["업종명"],
-                "change_rate": round(float(row["change_rate"]), 2),
+                "name": row["name"],
+                "change_rate": round(float(row["change_rate"]), 2) if pd.notna(row["change_rate"]) else 0.0,
                 "total": int(row["total"]),
                 "rising": int(row["rising"]),
             }
