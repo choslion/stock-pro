@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
+import ErrorBlock from "./ui/ErrorBlock";
+import parseError from "../lib/parseError";
+import ScrollTabs from "./ui/ScrollTabs";
 import { THEMES } from "../config/themes";
+
+const THEME_TABS = THEMES.map((t) => ({ id: t.id, label: `${t.emoji} ${t.label}` }));
 
 function ChangeRate({ value }) {
   const color = value === 0 ? "text-gray-400" : value > 0 ? "text-red-400" : "text-blue-400";
@@ -22,7 +27,7 @@ function SectionHeader({ children }) {
 }
 
 export default function ThemeSectors() {
-  const [themeIdx, setThemeIdx]   = useState(0);
+  const [themeId, setThemeId]     = useState(THEMES[0].id);
   const [krMap, setKrMap]         = useState({});
   const [usStocks, setUsStocks]   = useState([]);
   const [usdKrw, setUsdKrw]       = useState(null);
@@ -34,7 +39,7 @@ export default function ThemeSectors() {
   const [usError, setUsError]     = useState("");
   const [retryCount, setRetryCount] = useState(0);
 
-  const theme = THEMES[themeIdx];
+  const theme = THEMES.find((t) => t.id === themeId) ?? THEMES[0];
 
   useEffect(() => {
     setKrMap({});
@@ -79,7 +84,7 @@ export default function ThemeSectors() {
     } else {
       setUsLoading(false);
     }
-  }, [themeIdx, retryCount]);
+  }, [themeId, retryCount]);
 
   const usNameMap = Object.fromEntries(theme.us_candidates.map((s) => [s.ticker, s.name]));
 
@@ -101,40 +106,29 @@ export default function ThemeSectors() {
   return (
     <Card title="🎯 분야별 동향" subtitle="테마별 주요 종목 현황">
       {/* 테마 탭 */}
-      <div className="flex gap-1.5 flex-wrap mb-4">
-        {THEMES.map((t, i) => (
-          <button
-            key={t.id}
-            onClick={() => setThemeIdx(i)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              themeIdx === i
-                ? "bg-blue-500 text-white"
-                : "bg-gray-700 text-gray-400 hover:bg-gray-600"
-            }`}
-          >
-            {t.emoji} {t.label}
-          </button>
-        ))}
+      <div className="mb-4">
+        <ScrollTabs tabs={THEME_TABS} activeId={themeId} onChange={setThemeId} ariaLabel="테마 선택" />
       </div>
 
-      {/* 헤더 */}
-      <div className="flex items-center justify-between mb-2 min-h-[24px]">
-        <div className="flex items-center gap-2">
-          {!usLoading && usAvg !== null && (
-            <span className={`text-sm font-semibold ${usAvg > 0 ? "text-red-400" : usAvg < 0 ? "text-blue-400" : "text-gray-400"}`}>
-              해외 평균 {usAvg > 0 ? "+" : ""}{usAvg.toFixed(2)}%
-            </span>
-          )}
-          {!isLoading && usdKrw && (
-            <span className="text-xs text-gray-500">· 1 USD = {usdKrw.toLocaleString("ko-KR")}원</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5">
+      {/* 헤더 — 2줄 구조로 모바일 대응 */}
+      <div className="mb-2 space-y-1 min-h-[40px]">
+        {/* 1줄: 해외 평균 (좌) + 원/달러 토글 (우) */}
+        <div className="flex items-center justify-between">
+          <span className={`text-sm font-semibold ${
+            !usLoading && usAvg !== null
+              ? usAvg > 0 ? "text-red-400" : usAvg < 0 ? "text-blue-400" : "text-gray-400"
+              : "text-transparent"
+          }`}>
+            {!usLoading && usAvg !== null
+              ? `해외 평균 ${usAvg > 0 ? "+" : ""}${usAvg.toFixed(2)}%`
+              : "·"}
+          </span>
+          <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5" role="group" aria-label="통화 선택">
             {["krw", "usd"].map((c) => (
               <button
                 key={c}
                 onClick={() => setCurrency(c)}
+                aria-pressed={currency === c}
                 className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
                   currency === c ? "bg-blue-500 text-white" : "text-gray-400 hover:text-gray-200"
                 }`}
@@ -143,18 +137,22 @@ export default function ThemeSectors() {
               </button>
             ))}
           </div>
-          {fetchedAt && (
-            <p className="text-xs text-gray-500">
-              {fetchedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준
-            </p>
-          )}
+        </div>
+        {/* 2줄: 환율 (좌) + 기준 시각 (우) */}
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>{!isLoading && usdKrw ? `1 USD = ${usdKrw.toLocaleString("ko-KR")}원` : ""}</span>
+          <span>
+            {fetchedAt
+              ? fetchedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " 기준"
+              : ""}
+          </span>
         </div>
       </div>
 
-      {/* 컬럼 헤더 */}
+      {/* 컬럼 헤더 — col-span-2/4 로 첫 컬럼 여유 확보 */}
       <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
-        <span className="col-span-1">구분</span>
-        <span className="col-span-5">종목명</span>
+        <span className="col-span-2 whitespace-nowrap">구분</span>
+        <span className="col-span-4">종목명</span>
         <span className="col-span-3 text-right">현재가</span>
         <span className="col-span-3 text-right">등락률</span>
       </div>
@@ -177,8 +175,8 @@ export default function ThemeSectors() {
                       key={config.ticker}
                       className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
                     >
-                      <span className="col-span-1 text-xs font-semibold text-blue-400">KR</span>
-                      <span className="col-span-5 text-sm font-medium truncate pr-2">{config.name}</span>
+                      <span className="col-span-2 text-xs font-semibold text-blue-400">KR</span>
+                      <span className="col-span-4 text-sm font-medium truncate pr-2">{config.name}</span>
                       <span className="col-span-3 text-right text-sm text-gray-300">
                         {stock ? (stock.price ?? 0).toLocaleString("ko-KR") + "원" : "-"}
                       </span>
@@ -208,10 +206,10 @@ export default function ThemeSectors() {
                     key={stock.ticker}
                     className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
                   >
-                    <span className="col-span-1 text-xs font-semibold text-yellow-400">
+                    <span className="col-span-2 text-xs font-semibold text-yellow-400">
                       {stock.rank}
                     </span>
-                    <span className="col-span-5 text-sm font-medium truncate pr-2">
+                    <span className="col-span-4 text-sm font-medium truncate pr-2">
                       {usNameMap[stock.ticker] ?? stock.ticker}
                     </span>
                     <span className="col-span-3 text-right text-sm text-gray-300">
