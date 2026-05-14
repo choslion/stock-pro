@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import yfinance as yf
 import httpx
 import pandas as pd
@@ -288,3 +289,327 @@ def get_investor_trends(market: str = Query("KOSPI")):
         return result
 
     return _get_cached(f"investor_trends_{market}", fetch)
+
+
+# ── 해외 주식 ──────────────────────────────────────────────────────
+
+US_STOCKS = {
+    "AAPL": "애플", "MSFT": "마이크로소프트", "NVDA": "엔비디아",
+    "AMZN": "아마존", "GOOGL": "알파벳", "META": "메타",
+    "TSLA": "테슬라", "JPM": "JP모건", "V": "비자",
+    "UNH": "유나이티드헬스", "AVGO": "브로드컴", "LLY": "일라이릴리",
+    "XOM": "엑슨모빌", "MA": "마스터카드", "HD": "홈디포",
+    "PG": "P&G", "JNJ": "존슨앤존슨", "COST": "코스트코",
+    "MRK": "머크", "ORCL": "오라클",
+}
+
+
+def _get_usd_krw() -> float:
+    hist = yf.Ticker("USDKRW=X").history(period="1d")
+    if hist.empty:
+        return 1380.0
+    return round(float(hist["Close"].iloc[-1]), 2)
+
+
+@app.get("/etf")
+def get_etf(type: str = Query("amount"), limit: int = Query(20)):
+    def fetch():
+        df = fdr.StockListing("ETF/KR")
+        if df.empty:
+            raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
+
+        if "ChagesRatio" in df.columns:
+            df = df.rename(columns={"ChagesRatio": "ChgRatio"})
+        elif "ChangeRate" in df.columns and "ChgRatio" not in df.columns:
+            df = df.rename(columns={"ChangeRate": "ChgRatio"})
+
+        for col in ["Volume", "Amount", "ChgRatio", "Close"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        if "Volume" in df.columns:
+            df = df[df["Volume"].fillna(0) > 0].copy()
+
+        if "ChgRatio" not in df.columns:
+            df["ChgRatio"] = 0.0
+        else:
+            df["ChgRatio"] = df["ChgRatio"].fillna(0.0)
+
+        if type == "volume" and "Volume" in df.columns:
+            sorted_df = df.sort_values("Volume", ascending=False)
+        elif type == "rising":
+            sorted_df = df[df["ChgRatio"] > 0].sort_values("ChgRatio", ascending=False)
+        elif type == "falling":
+            sorted_df = df[df["ChgRatio"] < 0].sort_values("ChgRatio", ascending=True)
+        else:
+            sort_col = "Amount" if "Amount" in df.columns else "Volume"
+            sorted_df = df.sort_values(sort_col, ascending=False)
+
+        top = sorted_df.head(limit)
+        if top.empty:
+            return []
+
+        result = []
+        for rank, (_, row) in enumerate(top.iterrows(), 1):
+            result.append({
+                "rank": rank,
+                "ticker": str(row.get("Symbol", row.get("Code", ""))),
+                "name": str(row.get("Name", "")),
+                "price": int(row["Close"]) if pd.notna(row.get("Close")) else 0,
+                "change_rate": round(float(row["ChgRatio"]), 2),
+            })
+        return result
+
+    return _get_cached(f"etf_{type}", fetch)
+
+
+@app.get("/watchlist")
+def get_watchlist(kr: str = Query(""), us: str = Query("")):
+    kr_tickers = [t.strip() for t in kr.split(",") if t.strip()] if kr else []
+    us_tickers = [t.strip() for t in us.split(",") if t.strip()] if us else []
+
+    cache_key = f"watchlist_{kr}_{us}"
+
+    def fetch():
+        items = []
+
+        if kr_tickers:
+            df = fdr.StockListing("KRX")
+            if "ChagesRatio" in df.columns:
+                df = df.rename(columns={"ChagesRatio": "ChgRatio"})
+            for col in ["Close", "ChgRatio"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+            code_col = "Code" if "Code" in df.columns else "Symbol"
+            for ticker in kr_tickers:
+                row = df[df[code_col] == ticker]
+                if not row.empty:
+                    r = row.iloc[0]
+                    items.append({
+                        "ticker": ticker,
+                        "market": "KR",
+                        "price": int(r["Close"]) if pd.notna(r.get("Close")) else 0,
+                        "change_rate": round(float(r["ChgRatio"]), 2) if pd.notna(r.get("ChgRatio")) else 0.0,
+                    })
+                else:
+                    items.append({"ticker": ticker, "market": "KR", "price": 0, "change_rate": 0.0})
+
+        usd_krw = None
+        if us_tickers:
+            usd_krw = _get_usd_krw()
+            dl_arg = us_tickers if len(us_tickers) > 1 else us_tickers[0]
+            raw = yf.download(dl_arg, period="2d", auto_adjust=True, progress=False)
+
+            for ticker in us_tickers:
+                try:
+                    c = (raw["Close"] if len(us_tickers) == 1 else raw["Close"][ticker]).dropna()
+                    if len(c) < 1:
+                        raise ValueError("no data")
+                    price_usd = float(c.iloc[-1])
+                    chg = round((price_usd - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
+                    items.append({
+                        "ticker": ticker,
+                        "market": "US",
+                        "price_usd": round(price_usd, 2),
+                        "price_krw": int(round(price_usd * usd_krw)),
+                        "change_rate": chg,
+                    })
+                except Exception:
+                    items.append({
+                        "ticker": ticker, "market": "US",
+                        "price_usd": 0.0, "price_krw": 0, "change_rate": 0.0,
+                    })
+
+        return {"usd_krw": usd_krw, "items": items}
+
+    return _get_cached(cache_key, fetch)
+
+
+@app.get("/theme-ranking")
+def get_theme_ranking(tickers: str = Query(...), limit: int = Query(10)):
+    ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
+    if not ticker_list:
+        return {"usd_krw": None, "stocks": []}
+
+    cache_key = f"theme_ranking_{','.join(sorted(ticker_list))}_{limit}"
+
+    def norm_list(values):
+        mn, mx = min(values), max(values)
+        if mx == mn:
+            return [0.5] * len(values)
+        return [(v - mn) / (mx - mn) for v in values]
+
+    def fetch():
+        # 1. Bulk OHLCV — 1년치
+        dl_arg = ticker_list if len(ticker_list) > 1 else ticker_list[0]
+        raw = yf.download(dl_arg, period="1y", auto_adjust=True, progress=False)
+        if raw.empty:
+            raise HTTPException(503, "데이터를 가져올 수 없습니다.")
+
+        close = raw["Close"] if len(ticker_list) > 1 else raw["Close"].to_frame(name=ticker_list[0])
+        volume = raw["Volume"] if len(ticker_list) > 1 else raw["Volume"].to_frame(name=ticker_list[0])
+
+        # 2. 펀더멘털 — 동시 요청
+        def _get_ticker_data(ticker):
+            try:
+                t = yf.Ticker(ticker)
+                info = t.info
+                rd_ratio = None
+                try:
+                    fin = t.financials
+                    if fin is not None and not fin.empty:
+                        rd_key = next((k for k in fin.index if "Research" in str(k)), None)
+                        if rd_key:
+                            rd_val = fin.loc[rd_key].iloc[0]
+                            rev = float(info.get("totalRevenue", 0) or 0)
+                            if pd.notna(rd_val) and rev > 0:
+                                rd_ratio = abs(float(rd_val)) / rev
+                except Exception:
+                    pass
+                return ticker, info, rd_ratio
+            except Exception:
+                return ticker, {}, None
+
+        info_map = {}
+        rd_map = {}
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            futs = {ex.submit(_get_ticker_data, t): t for t in ticker_list}
+            for fut in as_completed(futs):
+                ticker, info, rd = fut.result()
+                info_map[ticker] = info
+                rd_map[ticker] = rd
+
+        # 3. 지표 계산
+        rows = []
+        for ticker in ticker_list:
+            try:
+                c = close[ticker].dropna()
+                v = volume[ticker].dropna()
+                if len(c) < 20:
+                    continue
+
+                price = float(c.iloc[-1])
+                chg = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2)
+
+                daily_ret = c.pct_change().dropna()
+                volatility = float(daily_ret.std()) * (252 ** 0.5) * 100  # 연환산 %
+
+                avg_vol = float(v.tail(20).mean())
+
+                info = info_map.get(ticker, {})
+                market_cap = float(info.get("marketCap", 0) or 0)
+                rev_growth = float(info.get("revenueGrowth", 0) or 0) * 100  # %
+
+                rows.append({
+                    "ticker": ticker,
+                    "price_usd": round(price, 2),
+                    "change_rate": chg,
+                    "_market_cap": market_cap,
+                    "_rev_growth": max(rev_growth, -50.0),  # -50% 하한
+                    "_avg_volume": avg_vol,
+                    "_volatility": volatility,
+                    "_rd_ratio": (rd_map.get(ticker) or 0) * 100,
+                    "revenue_growth_pct": round(rev_growth, 1),
+                    "volatility_pct": round(volatility, 1),
+                    "rd_ratio_pct": round(rd_map.get(ticker, 0) * 100, 1) if rd_map.get(ticker) else None,
+                })
+            except Exception:
+                continue
+
+        if not rows:
+            raise HTTPException(503, "스코어링 데이터를 가져올 수 없습니다.")
+
+        # 4. 정규화 & 스코어
+        has_rd = any(r["_rd_ratio"] > 0 for r in rows)
+        nc = norm_list([r["_market_cap"] for r in rows])
+        ng = norm_list([r["_rev_growth"] for r in rows])
+        nv = norm_list([r["_avg_volume"] for r in rows])
+        nvt = norm_list([r["_volatility"] for r in rows])
+        nrd = norm_list([r["_rd_ratio"] for r in rows]) if has_rd else [0.0] * len(rows)
+
+        if has_rd:
+            w = (0.30, 0.25, 0.20, 0.15, 0.10)
+        else:
+            w = (0.35, 0.30, 0.22, 0.13, 0.0)
+
+        for i, r in enumerate(rows):
+            r["score"] = round(
+                w[0] * nc[i] + w[1] * ng[i] + w[2] * nv[i] + w[3] * nvt[i] + w[4] * nrd[i], 4
+            )
+            for k in ("_market_cap", "_rev_growth", "_avg_volume", "_volatility", "_rd_ratio"):
+                r.pop(k, None)
+
+        rows.sort(key=lambda x: x["score"], reverse=True)
+        top = rows[:limit]
+
+        usd_krw = _get_usd_krw()
+        for i, r in enumerate(top, 1):
+            r["rank"] = i
+            r["price_krw"] = int(round(r["price_usd"] * usd_krw))
+
+        return {"usd_krw": usd_krw, "stocks": top}
+
+    # 펀더멘털 캐시는 1시간
+    now = time.time()
+    entry = _cache.get(cache_key)
+    if entry and now - entry["ts"] < 3600:
+        return entry["data"]
+    data = fetch()
+    _cache[cache_key] = {"data": data, "ts": now}
+    return data
+
+
+@app.get("/stocks/us-ranking")
+def get_us_ranking(type: str = Query("amount"), limit: int = Query(10)):
+    def fetch():
+        tickers = list(US_STOCKS.keys())
+        raw = yf.download(tickers, period="2d", auto_adjust=True, progress=False)
+        if raw.empty:
+            raise HTTPException(503, "해외 주식 데이터를 가져올 수 없습니다.")
+
+        usd_krw = _get_usd_krw()
+        close = raw["Close"]
+        volume = raw["Volume"]
+
+        rows = []
+        for ticker in tickers:
+            try:
+                c = close[ticker].dropna()
+                v = volume[ticker].dropna()
+                if len(c) < 1:
+                    continue
+                price_usd = float(c.iloc[-1])
+                vol = float(v.iloc[-1]) if len(v) >= 1 else 0.0
+                chg = round((price_usd - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
+                rows.append({
+                    "ticker": ticker,
+                    "name": US_STOCKS[ticker],
+                    "price_usd": round(float(price_usd), 2),
+                    "price_krw": int(round(float(price_usd) * float(usd_krw))),
+                    "change_rate": chg,
+                    "volume": int(vol),
+                    "amount": round(float(price_usd) * float(vol)),
+                })
+            except Exception:
+                continue
+
+        if not rows:
+            raise HTTPException(503, "해외 주식 데이터를 가져올 수 없습니다.")
+
+        df = pd.DataFrame(rows)
+        if type == "volume":
+            df = df.sort_values("volume", ascending=False)
+        elif type == "rising":
+            df = df[df["change_rate"] > 0].sort_values("change_rate", ascending=False)
+        elif type == "falling":
+            df = df[df["change_rate"] < 0].sort_values("change_rate")
+        else:
+            df = df.sort_values("amount", ascending=False)
+
+        top = df.head(limit)
+        return {
+            "usd_krw": usd_krw,
+            "stocks": [{"rank": i + 1, **r} for i, r in enumerate(top.to_dict(orient="records"))],
+        }
+
+    return _get_cached(f"us_ranking_{type}", fetch)

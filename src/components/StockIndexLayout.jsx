@@ -4,6 +4,9 @@ import GetSp500 from "./GetSp500";
 import GetFgi from "./GetFgi";
 import GetVixFgiScore from "./GetVixFgiScore";
 import MarketTrends from "./MarketTrends";
+import EtfList from "./EtfList";
+import Watchlist from "./Watchlist";
+import ThemeSectors from "./ThemeSectors";
 
 export default function StockIndexDashboard() {
   return (
@@ -32,6 +35,15 @@ export default function StockIndexDashboard() {
           </div>
           <div className="col-span-1 w-full">
             <MarketTrends />
+          </div>
+          <div className="col-span-1 w-full">
+            <ThemeSectors />
+          </div>
+          <div className="col-span-1 w-full">
+            <EtfList />
+          </div>
+          <div className="col-span-1 w-full">
+            <Watchlist />
           </div>
         </div>
       </div>
