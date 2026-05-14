@@ -311,6 +311,16 @@ def _get_usd_krw() -> float:
     return round(float(hist["Close"].iloc[-1]), 2)
 
 
+@app.get("/debug/etf-columns")
+def debug_etf_columns():
+    df = fdr.StockListing("ETF/KR")
+    return {
+        "columns": list(df.columns),
+        "shape": list(df.shape),
+        "sample": df.head(3).fillna("").to_dict(orient="records"),
+    }
+
+
 @app.get("/etf")
 def get_etf(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
@@ -318,29 +328,25 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
         if df.empty:
             raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
 
-        if "ChagesRatio" in df.columns:
-            df = df.rename(columns={"ChagesRatio": "ChgRatio"})
-        elif "ChangeRate" in df.columns and "ChgRatio" not in df.columns:
-            df = df.rename(columns={"ChangeRate": "ChgRatio"})
+        # ETF/KR 실제 컬럼: Price, ChangeRate (Close/ChagesRatio 아님)
+        price_col = next((c for c in ["Price", "Close"] if c in df.columns), None)
+        rate_col  = next((c for c in ["ChangeRate", "ChagesRatio", "ChgRatio"] if c in df.columns), None)
 
-        for col in ["Volume", "Amount", "ChgRatio", "Close"]:
-            if col in df.columns:
+        for col in ["Volume", "Amount", price_col, rate_col]:
+            if col and col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
         if "Volume" in df.columns:
             df = df[df["Volume"].fillna(0) > 0].copy()
 
-        if "ChgRatio" not in df.columns:
-            df["ChgRatio"] = 0.0
-        else:
-            df["ChgRatio"] = df["ChgRatio"].fillna(0.0)
+        chg = df[rate_col].fillna(0.0) if rate_col else pd.Series(0.0, index=df.index)
 
         if type == "volume" and "Volume" in df.columns:
             sorted_df = df.sort_values("Volume", ascending=False)
         elif type == "rising":
-            sorted_df = df[df["ChgRatio"] > 0].sort_values("ChgRatio", ascending=False)
+            sorted_df = df[chg > 0].sort_values(rate_col or "Volume", ascending=False)
         elif type == "falling":
-            sorted_df = df[df["ChgRatio"] < 0].sort_values("ChgRatio", ascending=True)
+            sorted_df = df[chg < 0].sort_values(rate_col or "Volume", ascending=True)
         else:
             sort_col = "Amount" if "Amount" in df.columns else "Volume"
             sorted_df = df.sort_values(sort_col, ascending=False)
@@ -351,12 +357,14 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
 
         result = []
         for rank, (_, row) in enumerate(top.iterrows(), 1):
+            price_val = row.get(price_col) if price_col else None
+            rate_val  = row.get(rate_col)  if rate_col  else None
             result.append({
                 "rank": rank,
                 "ticker": str(row.get("Symbol", row.get("Code", ""))),
                 "name": str(row.get("Name", "")),
-                "price": int(row["Close"]) if pd.notna(row.get("Close")) else 0,
-                "change_rate": round(float(row["ChgRatio"]), 2),
+                "price": int(price_val) if price_val is not None and pd.notna(price_val) else 0,
+                "change_rate": round(float(rate_val), 2) if rate_val is not None and pd.notna(rate_val) else 0.0,
             })
         return result
 
@@ -364,25 +372,72 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
 
 
 @app.get("/watchlist")
-def get_watchlist(kr: str = Query(""), us: str = Query("")):
+def get_watchlist(kr: str = Query(""), us: str = Query(""), kr_names: str = Query("")):
     kr_tickers = [t.strip() for t in kr.split(",") if t.strip()] if kr else []
+    kr_names_list = [n.strip() for n in kr_names.split(",") if n.strip()] if kr_names else []
     us_tickers = [t.strip() for t in us.split(",") if t.strip()] if us else []
 
     cache_key = f"watchlist_{kr}_{us}"
+
+    def _find_by_name(df, name_hint):
+        """ETF 이름으로 부분 일치 검색 (Name 또는 Symbol 컬럼)"""
+        if df.empty or not name_hint:
+            return pd.DataFrame()
+        name_col = next((c for c in ["Name", "Symbol", "종목명"] if c in df.columns), None)
+        if not name_col:
+            return pd.DataFrame()
+        hint = name_hint.replace(" ", "").lower()
+        mask = df[name_col].astype(str).str.replace(" ", "").str.lower().str.contains(hint[:10], regex=False)
+        return df[mask]
 
     def fetch():
         items = []
 
         if kr_tickers:
-            df = fdr.StockListing("KRX")
-            if "ChagesRatio" in df.columns:
-                df = df.rename(columns={"ChagesRatio": "ChgRatio"})
-            for col in ["Close", "ChgRatio"]:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
-            code_col = "Code" if "Code" in df.columns else "Symbol"
-            for ticker in kr_tickers:
-                row = df[df[code_col] == ticker]
+            def _normalize_df(d):
+                """KRX/ETF 리스팅을 price_col=Close, rate_col=ChgRatio로 통일"""
+                # 가격 컬럼 통일: ETF/KR은 'Price', KRX는 'Close'
+                if "Price" in d.columns and "Close" not in d.columns:
+                    d = d.rename(columns={"Price": "Close"})
+                # 등락률 컬럼 통일
+                for src in ["ChangeRate", "ChagesRatio"]:
+                    if src in d.columns and "ChgRatio" not in d.columns:
+                        d = d.rename(columns={src: "ChgRatio"})
+                for col in ["Close", "ChgRatio"]:
+                    if col in d.columns:
+                        d[col] = pd.to_numeric(d[col], errors="coerce")
+                return d
+
+            krx_df = _normalize_df(fdr.StockListing("KRX"))
+            etf_df = None  # lazy-load only if needed
+            krx_code_col = "Code" if "Code" in krx_df.columns else "Symbol"
+
+            for i, ticker in enumerate(kr_tickers):
+                name_hint = kr_names_list[i] if i < len(kr_names_list) else None
+                row = krx_df[krx_df[krx_code_col] == ticker]
+
+                if row.empty:
+                    # fallback 1: ETF/KR listing by code
+                    if etf_df is None:
+                        try:
+                            etf_df = _normalize_df(fdr.StockListing("ETF/KR"))
+                        except Exception:
+                            etf_df = pd.DataFrame()
+                    etf_code_col = "Code" if "Code" in etf_df.columns else ("Symbol" if "Symbol" in etf_df.columns else None)
+                    if etf_code_col and not etf_df.empty:
+                        row = etf_df[etf_df[etf_code_col] == ticker]
+
+                if row.empty and name_hint:
+                    # fallback 2: ETF/KR listing by name (for HTS-only internal codes)
+                    if etf_df is None:
+                        try:
+                            etf_df = _normalize_df(fdr.StockListing("ETF/KR"))
+                        except Exception:
+                            etf_df = pd.DataFrame()
+                    row = _find_by_name(etf_df, name_hint)
+                    if row.empty:
+                        row = _find_by_name(krx_df, name_hint)
+
                 if not row.empty:
                     r = row.iloc[0]
                     items.append({

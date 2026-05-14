@@ -1,11 +1,14 @@
 // 관심종목 설정 — 직접 수정하세요
 // market: "KR" = 국내 (종목코드), "US" = 해외 (티커)
 export const WATCHLIST = [
-  { ticker: "005930", name: "삼성전자",     market: "KR" },
-  { ticker: "000660", name: "SK하이닉스",   market: "KR" },
-  { ticker: "035420", name: "NAVER",         market: "KR" },
-  { ticker: "035720", name: "카카오",        market: "KR" },
-  { ticker: "AAPL",   name: "애플",          market: "US" },
-  { ticker: "NVDA",   name: "엔비디아",      market: "US" },
-  { ticker: "TSLA",   name: "테슬라",        market: "US" },
+  // ── 국내 ETF ──
+  { ticker: "0117V0", name: "TIGER 코리아AI전력기기TOP3플러스", market: "KR" },
+  { ticker: "0167Z0", name: "KODEX 미국우주항공 ETF",           market: "KR" },
+
+  // ── 해외 ──
+  { ticker: "IREN",  name: "아이렌", market: "US" },
+  { ticker: "NBIS",  name: "네비우스그룹",          market: "US" },
+  { ticker: "ANET",  name: "아리스타 네트웍스",      market: "US" },
+  { ticker: "IONQ",  name: "아이온큐",         market: "US" },
+  { ticker: "OKTA",  name: "옥타",                  market: "US" },
 ];
