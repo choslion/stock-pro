@@ -1,11 +1,11 @@
 import { useState } from "react";
 import Card from "./ui/Card";
 import StockRanking from "./StockRanking";
-import TrendingSectors from "./TrendingSectors";
+import InvestorTrends from "./InvestorTrends";
 
 const TABS = [
-  { id: "ranking", label: "실시간 차트" },
-  { id: "sectors", label: "지금 뜨는 카테고리" },
+  { id: "ranking",  label: "실시간 차트" },
+  { id: "investor", label: "투자자 동향" },
 ];
 
 export default function MarketTrends() {
@@ -29,8 +29,8 @@ export default function MarketTrends() {
         ))}
       </div>
 
-      {activeTab === "ranking" && <StockRanking />}
-      {activeTab === "sectors" && <TrendingSectors />}
+      {activeTab === "ranking"  && <StockRanking />}
+      {activeTab === "investor" && <InvestorTrends />}
     </Card>
   );
 }

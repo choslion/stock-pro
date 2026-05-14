@@ -158,25 +158,17 @@ def get_score():
 def _get_listing(market: str) -> pd.DataFrame:
     mkt = {"ALL": "KRX", "KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ"}.get(market, "KRX")
     df = fdr.StockListing(mkt)
-    for col in ["Volume", "Amount", "ChgRatio", "Close", "Prev", "Open"]:
+
+    # 실제 컬럼명 ChagesRatio (오타)를 ChgRatio로 통일
+    if "ChagesRatio" in df.columns:
+        df = df.rename(columns={"ChagesRatio": "ChgRatio"})
+
+    for col in ["Volume", "Amount", "ChgRatio", "Close", "Marcap", "Open"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df[df["Volume"].fillna(0) > 0].copy()
-
-    # ChgRatio가 없거나 모두 0이면 Prev 또는 Open 기반으로 계산
-    has_chg = "ChgRatio" in df.columns and df["ChgRatio"].fillna(0).abs().sum() > 0
-    if not has_chg:
-        if "Prev" in df.columns and df["Prev"].fillna(0).sum() > 0:
-            prev = df["Prev"].replace(0, float("nan"))
-            df["ChgRatio"] = (df["Close"] - prev) / prev * 100
-        elif "Open" in df.columns and df["Open"].fillna(0).sum() > 0:
-            open_ = df["Open"].replace(0, float("nan"))
-            df["ChgRatio"] = (df["Close"] - open_) / open_ * 100
-        else:
-            df["ChgRatio"] = 0.0
-
-    df["ChgRatio"] = df["ChgRatio"].fillna(0.0)
+    df["ChgRatio"] = df["ChgRatio"].fillna(0.0) if "ChgRatio" in df.columns else 0.0
     return df
 
 
@@ -254,3 +246,45 @@ def get_sectors(market: str = Query("KOSPI")):
         ]
 
     return _get_cached(f"sectors_{market}", fetch)
+
+
+
+@app.get("/investor-trends")
+def get_investor_trends(market: str = Query("KOSPI")):
+    def fetch():
+        df = _get_listing(market)
+        if df.empty:
+            raise HTTPException(503, "데이터를 가져올 수 없습니다.")
+
+        for col in ["ForeignRatio", "Amount"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+        def to_rows(sorted_df, extra_key=None, extra_col=None):
+            rows = []
+            for i, (_, row) in enumerate(sorted_df.head(10).iterrows(), 1):
+                item = {
+                    "rank": i,
+                    "ticker": str(row.get("Symbol", row.get("Code", ""))),
+                    "name": str(row.get("Name", "")),
+                    "price": int(row["Close"]) if pd.notna(row.get("Close")) else 0,
+                    "change_rate": round(float(row["ChgRatio"]), 2) if pd.notna(row.get("ChgRatio")) else 0.0,
+                }
+                if extra_key and extra_col and extra_col in row.index:
+                    item[extra_key] = round(float(row[extra_col]), 2)
+                rows.append(item)
+            return rows
+
+        result = {
+            "marcap": to_rows(
+                df.sort_values("Marcap", ascending=False) if "Marcap" in df.columns else df,
+                "marcap", "Marcap"
+            ),
+            "hot": to_rows(
+                df.sort_values("Amount", ascending=False) if "Amount" in df.columns else df,
+                "amount", "Amount"
+            ),
+        }
+        return result
+
+    return _get_cached(f"investor_trends_{market}", fetch)
