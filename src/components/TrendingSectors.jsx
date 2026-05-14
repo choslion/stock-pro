@@ -2,25 +2,27 @@ import { useEffect, useState } from "react";
 import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
 
-function ChangeRateBadge({ value }) {
-  const isPositive = value > 0;
-  const isNeutral = value === 0;
-  const textColor = isNeutral
-    ? "text-gray-400"
-    : isPositive
-    ? "text-red-400"
-    : "text-blue-400";
-  const bgColor = isNeutral
-    ? "bg-gray-700"
-    : isPositive
-    ? "bg-red-900/40"
-    : "bg-blue-900/40";
-  return (
-    <span className={`text-sm font-bold px-2 py-0.5 rounded ${bgColor} ${textColor}`}>
-      {isPositive ? "+" : ""}
-      {value.toFixed(2)}%
-    </span>
-  );
+const EMOJI_MAP = {
+  "운수장비": "🚗", "음식료품": "🍱", "섬유의복": "👕", "화학": "⚗️",
+  "금융업": "🏦", "건설업": "🏗️", "전기전자": "💻", "철강금속": "⚙️",
+  "기계": "🔧", "의약품": "💊", "서비스업": "🏢", "유통업": "🛒",
+  "통신업": "📱", "보험": "🛡️", "증권": "📈", "은행": "🏦",
+  "비금속광물": "🪨", "종이목재": "📄", "전기가스업": "⚡", "운수창고": "📦",
+  "의료정밀": "🔬", "농업": "🌾", "수산업": "🐟", "광업": "⛏️",
+};
+
+function getEmoji(name) {
+  for (const [key, emoji] of Object.entries(EMOJI_MAP)) {
+    if (name.includes(key)) return emoji;
+  }
+  return "📊";
+}
+
+function now() {
+  return new Date().toLocaleString("ko-KR", {
+    month: "numeric", day: "numeric",
+    hour: "numeric", minute: "numeric",
+  });
 }
 
 export default function TrendingSectors() {
@@ -37,36 +39,44 @@ export default function TrendingSectors() {
   }, []);
 
   if (loading) return <Spin />;
-
-  if (error)
-    return <p className="text-red-400 text-sm text-center py-4">❌ {error}</p>;
+  if (error) return <p className="text-red-400 text-sm text-center py-4">❌ {error}</p>;
 
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-3">KOSPI 업종별 평균 등락률 기준</p>
-      <div className="space-y-1.5">
-        {data.map((sector, i) => (
-          <div
-            key={sector.name}
-            className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-gray-700/30 hover:bg-gray-700/60 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-gray-500 text-sm w-5 shrink-0">{i + 1}</span>
-              <div>
-                <p className="text-sm font-medium">{sector.name}</p>
+      <p className="text-xs text-gray-500 mb-3">국내 · {now()} 기준</p>
+
+      <div className="divide-y divide-gray-700/50">
+        {data.map((sector, i) => {
+          const isPositive = sector.change_rate > 0;
+          const isNeutral = sector.change_rate === 0;
+          const rateColor = isNeutral ? "text-gray-400" : isPositive ? "text-red-400" : "text-blue-400";
+
+          return (
+            <div
+              key={sector.name}
+              className="flex items-center gap-4 py-3 px-1 hover:bg-gray-700/20 transition-colors"
+            >
+              <span className="text-blue-400 font-bold text-sm w-5 shrink-0 text-center">
+                {i + 1}
+              </span>
+              <span className="text-xl w-7 shrink-0 text-center">
+                {getEmoji(sector.name)}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{sector.name}</p>
                 <p className="text-xs text-gray-500">
-                  {sector.total}개 중 {sector.rising}개 상승
+                  {sector.total}개 중 {sector.rising}개 종목 상승
                 </p>
               </div>
+              <span className={`text-sm font-bold shrink-0 ${rateColor}`}>
+                {isPositive ? "+" : ""}{sector.change_rate.toFixed(1)}%
+              </span>
             </div>
-            <ChangeRateBadge value={sector.change_rate} />
-          </div>
-        ))}
+          );
+        })}
 
         {data.length === 0 && (
-          <p className="text-gray-500 text-center py-6 text-sm">
-            데이터가 없습니다.
-          </p>
+          <p className="text-gray-500 text-center py-6 text-sm">데이터가 없습니다.</p>
         )}
       </div>
     </div>
