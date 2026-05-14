@@ -1,8 +1,10 @@
 // components/VixChart.jsx
 import { useEffect, useState } from "react";
-import axiosInstance from "../lib/axiosInstance"; // axios 인스턴스 가져오기
+import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
+import ErrorBlock from "./ui/ErrorBlock";
+import parseError from "../lib/parseError";
 import {
   LineChart,
   Line,
@@ -30,7 +32,7 @@ export default function VixChart() {
       .then((res) =>
         setData(res.data.map((d) => ({ date: d.date, value: parseFloat(d.value) })))
       )
-      .catch((err) => setError(err.response?.data?.message || err.message));
+      .catch((err) => setError(parseError(err)));
   }, [startDate, endDate]);
 
   return (
@@ -66,9 +68,7 @@ export default function VixChart() {
       </div>
 
       {/* 에러 메시지 */}
-      {error && (
-        <div className="text-red-400 text-sm mb-4">❌ 에러: {error}</div>
-      )}
+      {error && <ErrorBlock message={error} />}
 
       {/* 차트 렌더링 */}
       <div className="h-80 sm:h-96">

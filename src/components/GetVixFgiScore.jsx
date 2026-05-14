@@ -9,6 +9,8 @@ import {
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
+import ErrorBlock from "./ui/ErrorBlock";
+import parseError from "../lib/parseError";
 
 const LEGEND = [
   { range: "0~20",   label: "극단적 공포", action: "매수 기회",  color: "text-green-400",  dot: "bg-green-400",  min: 0,  max: 20  },
@@ -29,6 +31,7 @@ function getScoreMeta(score) {
 export default function GetVixFgiScore() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
   const [displayScore, setDisplayScore] = useState("0.0");
   const [score, setScore] = useState(0);
   const [meta, setMeta] = useState(null);
@@ -38,6 +41,8 @@ export default function GetVixFgiScore() {
   const smoothWidth = useTransform(smoothScore, (v) => `${Math.min(v, 100)}%`);
 
   useEffect(() => {
+    setLoading(true);
+    setError("");
     axiosInstance
       .get("/score")
       .then((res) => {
@@ -48,10 +53,10 @@ export default function GetVixFgiScore() {
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message || "에러 발생");
+        setError(parseError(err));
         setLoading(false);
       });
-  }, [scoreMotion]);
+  }, [scoreMotion, retryCount]);
 
   useEffect(() => {
     const unsubscribe = smoothScore.on("change", (v) => {
@@ -71,7 +76,7 @@ export default function GetVixFgiScore() {
   if (error) {
     return (
       <Card title="🎯 지금 투자 타이밍인가요?" subtitle="VIX + FGI 기반 종합 점수">
-        <p className="text-red-400">❌ {error}</p>
+        <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
       </Card>
     );
   }

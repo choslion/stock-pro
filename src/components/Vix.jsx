@@ -3,6 +3,8 @@ import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import SummaryBanner from "./ui/SummaryBanner";
+import ErrorBlock from "./ui/ErrorBlock";
+import parseError from "../lib/parseError";
 
 function getVixMeta(value) {
   if (value < 15) return {
@@ -24,45 +26,42 @@ function getVixMeta(value) {
 }
 
 export default function Vix() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
+  const [data, setData]           = useState(null);
+  const [error, setError]         = useState("");
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
+    setData(null);
+    setError("");
     axiosInstance
       .get("/vix")
       .then((res) => setData(res.data))
-      .catch((err) => {
-        setError(err.response?.data?.message || err.message);
-      });
-  }, []);
+      .catch((err) => setError(parseError(err)));
+  }, [retryCount]);
 
-  if (error)
-    return (
-      <Card title="🌊 시장 불안 지수" subtitle="CBOE Volatility Index (VIX)">
-        <p className="text-red-400">❌ 에러 발생: {error}</p>
-      </Card>
-    );
-
-  if (!data)
-    return (
-      <Card title="🌊 시장 불안 지수" subtitle="CBOE Volatility Index (VIX)">
-        <Spin />
-      </Card>
-    );
-
-  const { label, color, banner } = getVixMeta(parseFloat(data.value));
+  const meta = data ? getVixMeta(parseFloat(data.value)) : null;
 
   return (
     <Card title="🌊 시장 불안 지수" subtitle="CBOE Volatility Index (VIX)">
-      <p className="text-sm text-gray-400">측정 날짜: {data.date}</p>
-      <div className="flex justify-between items-center mt-1">
-        <span className="text-base">현재 지수:</span>
-        <span className={`text-2xl font-bold ${color}`}>
-          {parseFloat(data.value).toFixed(2)}
-        </span>
+      <div className="min-h-[200px] flex flex-col justify-center">
+        {error ? (
+          <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
+        ) : !data ? (
+          <Spin />
+        ) : (
+          <>
+            <p className="text-sm text-gray-400">측정 날짜: {data.date}</p>
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-base">현재 지수:</span>
+              <span className={`text-2xl font-bold ${meta.color}`}>
+                {parseFloat(data.value).toFixed(2)}
+              </span>
+            </div>
+            <p className={`text-sm mt-2 ${meta.color}`}>● {meta.label}</p>
+            <SummaryBanner text={meta.banner.text} type={meta.banner.type} />
+          </>
+        )}
       </div>
-      <p className={`text-sm mt-2 ${color}`}>● {label}</p>
-      <SummaryBanner text={banner.text} type={banner.type} />
     </Card>
   );
 }
