@@ -4,6 +4,7 @@ import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
+import ScrollTabs from "./ui/ScrollTabs";
 
 const FILTERS = [
   { id: "amount",  label: "거래대금" },
@@ -52,20 +53,8 @@ export default function EtfList() {
         )}
       </div>
 
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className={`px-3 py-1 rounded-full text-xs transition-colors ${
-              filter === f.id
-                ? "bg-blue-500 text-white"
-                : "bg-gray-700 text-gray-400 hover:bg-gray-600"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="mb-4">
+        <ScrollTabs tabs={FILTERS} activeId={filter} onChange={setFilter} ariaLabel="ETF 필터" />
       </div>
 
       <div className="min-h-[420px]">
@@ -78,8 +67,8 @@ export default function EtfList() {
         ) : (
           <>
             <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
-              <span className="col-span-1">순위</span>
-              <span className="col-span-6">ETF명</span>
+              <span className="col-span-2 whitespace-nowrap">순위</span>
+              <span className="col-span-5">ETF명</span>
               <span className="col-span-2 text-right">현재가</span>
               <span className="col-span-3 text-right">등락률</span>
             </div>
@@ -90,8 +79,8 @@ export default function EtfList() {
                   key={stock.ticker}
                   className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
                 >
-                  <span className="col-span-1 text-gray-500 text-sm">{stock.rank}</span>
-                  <span className="col-span-6 text-sm font-medium truncate pr-2">{stock.name}</span>
+                  <span className="col-span-2 text-gray-500 text-sm">{stock.rank}</span>
+                  <span className="col-span-5 text-sm font-medium truncate pr-2">{stock.name}</span>
                   <span className="col-span-2 text-right text-sm text-gray-300">
                     {(stock.price ?? 0).toLocaleString("ko-KR")}원
                   </span>
