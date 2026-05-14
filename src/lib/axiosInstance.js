@@ -3,7 +3,7 @@ import { useToastStore } from "../store/useToastStore";
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: 10000,
+  timeout: 61000,
 });
 
 axiosInstance.interceptors.response.use(
