@@ -79,22 +79,36 @@ export default function StockIndexDashboard() {
       <nav
         aria-label="주요 섹션"
         className="lg:hidden fixed bottom-0 inset-x-0 z-20
-                   bg-gray-900/95 backdrop-blur-sm border-t border-gray-800
-                   flex safe-area-pb"
+                   bg-gray-900 border-t-2 border-gray-700
+                   flex shadow-[0_-4px_20px_rgba(0,0,0,0.5)]"
       >
-        {NAV_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            aria-current={activeTab === tab.id ? "page" : undefined}
-            className={`flex-1 flex flex-col items-center pt-2 pb-3 gap-0.5 transition-colors
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400
-              ${activeTab === tab.id ? "text-blue-400" : "text-gray-500 hover:text-gray-300"}`}
-          >
-            <span className="text-xl leading-none">{tab.icon}</span>
-            <span className="text-[11px] font-medium tracking-wide">{tab.label}</span>
-          </button>
-        ))}
+        {NAV_TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={isActive ? "page" : undefined}
+              className={`relative flex-1 flex flex-col items-center pt-2 pb-4 gap-1 transition-all duration-200
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400
+                ${isActive ? "text-white" : "text-gray-500 hover:text-gray-300"}`}
+            >
+              {/* 활성 탭 상단 인디케이터 */}
+              {isActive && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-0.5 rounded-b-full bg-blue-400" />
+              )}
+              {/* 활성 탭 아이콘 배경 */}
+              <span className={`flex items-center justify-center w-10 h-7 rounded-xl text-lg transition-all duration-200
+                ${isActive ? "bg-blue-500/20 scale-110" : ""}`}>
+                {tab.icon}
+              </span>
+              <span className={`text-[11px] font-semibold tracking-wide transition-colors
+                ${isActive ? "text-blue-300" : "text-gray-500"}`}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
