@@ -59,15 +59,20 @@ function formatVolume(value) {
 }
 
 function EtfTable({ stocks, filter, isUs }) {
-  const isAmount = filter === "amount";
-  const isVolume = filter === "volume";
+  const isAmount  = filter === "amount";
+  const isVolume  = filter === "volume";
+  const showPrice = isAmount || isVolume; // 현재가를 서브텍스트로 따로 표시할 탭
   const metricLabel = isAmount ? (isUs ? "거래대금(USD)" : "거래대금") : isVolume ? "거래량" : "현재가";
+
+  function priceStr(stock) {
+    if (isUs) return stock.price ? "$" + stock.price.toFixed(2) : "-";
+    return stock.price ? stock.price.toLocaleString("ko-KR") + "원" : "-";
+  }
 
   function metricValue(stock) {
     if (isAmount) return isUs ? formatUsd(stock.amount) : formatWon(stock.amount);
     if (isVolume) return formatVolume(stock.volume);
-    if (isUs) return "$" + (stock.price ?? 0).toFixed(2);
-    return (stock.price ?? 0).toLocaleString("ko-KR") + "원";
+    return priceStr(stock);
   }
 
   return (
@@ -87,9 +92,13 @@ function EtfTable({ stocks, filter, isUs }) {
             <span className="col-span-1 text-gray-500 text-sm">{stock.rank}</span>
             <div className="col-span-5 pr-2 min-w-0">
               <p className="text-sm font-medium truncate">{stock.name}</p>
-              {isUs && <p className="text-[10px] text-gray-500">{stock.ticker}</p>}
+              <p className="text-[11px] text-gray-500 tabular-nums mt-0.5">
+                {isUs ? stock.ticker + " · " : ""}{showPrice ? priceStr(stock) : stock.ticker}
+              </p>
             </div>
-            <span className="col-span-3 text-right text-sm text-gray-300">{metricValue(stock)}</span>
+            <div className="col-span-3 text-right">
+              <p className="text-sm text-gray-300 tabular-nums">{metricValue(stock)}</p>
+            </div>
             <span className="col-span-3 text-right text-sm">
               <ChangeRate value={stock.change_rate} />
             </span>
