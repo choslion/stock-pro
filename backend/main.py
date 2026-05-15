@@ -888,3 +888,75 @@ def get_us_ranking(type: str = Query("amount"), limit: int = Query(10)):
         }
 
     return _get_cached(f"us_ranking_{type}", fetch)
+
+
+@app.get("/kr-theme-stocks")
+def get_kr_theme_stocks(keyword: str = Query(...)):
+    import re as _re
+    import requests as _req
+    from bs4 import BeautifulSoup as _BS
+
+    cache_key = f"kr_theme_{keyword}"
+
+    def fetch():
+        # 1. 테마 목록에서 키워드로 테마 번호 찾기
+        list_url = "https://finance.naver.com/sise/sise_group.naver?type=theme"
+        res = _req.get(list_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        soup = _BS(res.content, "html.parser", from_encoding="euc-kr")
+
+        theme_no = None
+        for a in soup.select("table.type_1 td a"):
+            if keyword in a.get_text(strip=True):
+                m = _re.search(r"no=(\d+)", a.get("href", ""))
+                if m:
+                    theme_no = m.group(1)
+                    break
+
+        if not theme_no:
+            raise HTTPException(404, f"'{keyword}' 테마를 찾을 수 없습니다.")
+
+        # 2. 테마 종목 상세 페이지 스크래핑
+        detail_url = f"https://finance.naver.com/sise/sise_group_detail.naver?type=theme&no={theme_no}"
+        res2 = _req.get(detail_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        soup2 = _BS(res2.content, "html.parser", from_encoding="euc-kr")
+
+        result = []
+        for row in soup2.select("table.type_5 tr"):
+            tds = row.find_all("td")
+            if len(tds) < 4:
+                continue
+
+            name_tag = tds[0].find("a")
+            if not name_tag:
+                continue
+
+            name = name_tag.get_text(strip=True)
+            href = name_tag.get("href", "")
+            m = _re.search(r"code=(\d+)", href)
+            if not m:
+                continue
+            ticker = m.group(1)
+
+            def _parse(td):
+                return td.get_text(strip=True).replace(",", "").replace("+", "").replace("%", "")
+
+            try:
+                price = int(_parse(tds[1]))
+                change_rate = float(_parse(tds[3]))
+            except (ValueError, IndexError):
+                continue
+
+            if name and ticker:
+                result.append({
+                    "ticker": ticker,
+                    "name": name,
+                    "price": price,
+                    "change_rate": change_rate,
+                })
+
+        if not result:
+            raise HTTPException(503, "테마 종목 데이터를 가져올 수 없습니다.")
+
+        return result
+
+    return _get_cached(cache_key, fetch)
