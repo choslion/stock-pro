@@ -7,6 +7,8 @@ import pandas as pd
 import FinanceDataReader as fdr
 from datetime import datetime
 import time
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
 
 app = FastAPI()
 
