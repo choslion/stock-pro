@@ -22,6 +22,67 @@ function ChangeRate({ value }) {
   );
 }
 
+function formatWon(value) {
+  if (!value) return "-";
+  if (value >= 1_000_000_000_000) return (value / 1_000_000_000_000).toFixed(1) + "조";
+  if (value >= 100_000_000)       return Math.round(value / 100_000_000) + "억";
+  if (value >= 10_000)            return Math.round(value / 10_000) + "만";
+  return value.toLocaleString("ko-KR");
+}
+
+function formatVolume(value) {
+  if (!value) return "-";
+  if (value >= 100_000_000) return (value / 100_000_000).toFixed(1) + "억주";
+  if (value >= 10_000)      return Math.round(value / 10_000) + "만주";
+  if (value >= 1_000)       return Math.round(value / 1_000) + "천주";
+  return value.toLocaleString("ko-KR") + "주";
+}
+
+function EtfTable({ stocks, filter }) {
+  const isAmount = filter === "amount";
+  const isVolume = filter === "volume";
+  const metricLabel = isAmount ? "거래대금" : isVolume ? "거래량" : "현재가";
+
+  function metricValue(stock) {
+    if (isAmount) return formatWon(stock.amount);
+    if (isVolume) return formatVolume(stock.volume);
+    return (stock.price ?? 0).toLocaleString("ko-KR") + "원";
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
+        <span className="col-span-2 whitespace-nowrap">순위</span>
+        <span className="col-span-4">ETF명</span>
+        <span className="col-span-3 text-right">{metricLabel}</span>
+        <span className="col-span-3 text-right">등락률</span>
+      </div>
+      <div className="divide-y divide-gray-700/50">
+        {stocks.map((stock) => (
+          <div
+            key={stock.ticker}
+            className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
+          >
+            <span className="col-span-2 text-gray-500 text-sm">{stock.rank}</span>
+            <span className="col-span-4 text-sm font-medium truncate pr-2">{stock.name}</span>
+            <span className="col-span-3 text-right text-sm text-gray-300">{metricValue(stock)}</span>
+            <span className="col-span-3 text-right text-sm">
+              <ChangeRate value={stock.change_rate} />
+            </span>
+          </div>
+        ))}
+        {stocks.length === 0 && (
+          <p className="text-gray-500 text-center py-6 text-sm">
+            {filter === "rising" || filter === "falling"
+              ? "현재 해당 조건의 ETF가 없습니다 (장 마감 또는 변동 없음)"
+              : "데이터가 없습니다."}
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
 export default function EtfList() {
   const [filter, setFilter]       = useState("amount");
   const [stocks, setStocks]       = useState([]);
@@ -65,40 +126,7 @@ export default function EtfList() {
         ) : error ? (
           <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
         ) : (
-          <>
-            <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
-              <span className="col-span-2 whitespace-nowrap">순위</span>
-              <span className="col-span-5">ETF명</span>
-              <span className="col-span-2 text-right">현재가</span>
-              <span className="col-span-3 text-right">등락률</span>
-            </div>
-
-            <div className="divide-y divide-gray-700/50">
-              {stocks.map((stock) => (
-                <div
-                  key={stock.ticker}
-                  className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
-                >
-                  <span className="col-span-2 text-gray-500 text-sm">{stock.rank}</span>
-                  <span className="col-span-5 text-sm font-medium truncate pr-2">{stock.name}</span>
-                  <span className="col-span-2 text-right text-sm text-gray-300">
-                    {(stock.price ?? 0).toLocaleString("ko-KR")}원
-                  </span>
-                  <span className="col-span-3 text-right text-sm">
-                    <ChangeRate value={stock.change_rate} />
-                  </span>
-                </div>
-              ))}
-
-              {stocks.length === 0 && (
-                <p className="text-gray-500 text-center py-6 text-sm">
-                  {filter === "rising" || filter === "falling"
-                    ? "현재 해당 조건의 ETF가 없습니다 (장 마감 또는 변동 없음)"
-                    : "데이터가 없습니다."}
-                </p>
-              )}
-            </div>
-          </>
+          <EtfTable stocks={stocks} filter={filter} />
         )}
       </div>
     </Card>

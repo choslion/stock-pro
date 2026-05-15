@@ -357,14 +357,18 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
 
         result = []
         for rank, (_, row) in enumerate(top.iterrows(), 1):
-            price_val = row.get(price_col) if price_col else None
-            rate_val  = row.get(rate_col)  if rate_col  else None
+            price_val  = row.get(price_col) if price_col else None
+            rate_val   = row.get(rate_col)  if rate_col  else None
+            vol_val    = row.get("Volume")
+            amt_val    = row.get("Amount")
             result.append({
                 "rank": rank,
                 "ticker": str(row.get("Symbol", row.get("Code", ""))),
                 "name": str(row.get("Name", "")),
                 "price": int(price_val) if price_val is not None and pd.notna(price_val) else 0,
                 "change_rate": round(float(rate_val), 2) if rate_val is not None and pd.notna(rate_val) else 0.0,
+                "volume": int(vol_val) if vol_val is not None and pd.notna(vol_val) else 0,
+                "amount": int(amt_val) if amt_val is not None and pd.notna(amt_val) else 0,
             })
         return result
 
