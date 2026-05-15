@@ -4,10 +4,17 @@ import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
 
+function fmtTs(isoUtc) {
+  if (!isoUtc) return null;
+  const d = new Date(isoUtc);
+  return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Seoul" });
+}
+
 export default function Forex() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [data, setData]           = useState([]);
+  const [fetchedAt, setFetchedAt] = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState("");
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -15,7 +22,10 @@ export default function Forex() {
     setError("");
     axiosInstance
       .get("/forex")
-      .then((res) => setData(res.data.items ?? res.data ?? []))
+      .then((res) => {
+        setData(res.data.items ?? res.data ?? []);
+        setFetchedAt(res.data.fetched_at ?? null);
+      })
       .catch((err) => setError(parseError(err)))
       .finally(() => setLoading(false));
   }, [retryCount]);
@@ -25,6 +35,9 @@ export default function Forex() {
 
   return (
     <div>
+      {fetchedAt && (
+        <p className="text-xs text-gray-500 text-right mb-2">{fmtTs(fetchedAt)} 기준</p>
+      )}
       <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
         <span className="col-span-4">통화</span>
         <span className="col-span-4 text-right">원화 환율</span>
