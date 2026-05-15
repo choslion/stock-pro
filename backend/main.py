@@ -26,12 +26,24 @@ _CACHE_TTL = 300  # 5분
 
 
 def _get_cached(key: str, fetch_fn):
+    """캐시 히트/미스 관계없이 데이터가 처음 수집된 시각(fetched_at)을 함께 반환한다."""
     now = time.time()
     entry = _cache.get(key)
     if entry and now - entry["ts"] < _CACHE_TTL:
-        return entry["data"]
-    data = fetch_fn()
-    _cache[key] = {"data": data, "ts": now}
+        data = entry["data"]
+        ts   = entry["ts"]
+    else:
+        data = fetch_fn()
+        ts   = now
+        _cache[key] = {"data": data, "ts": ts}
+
+    fetched_at = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # dict/list 모두 처리
+    if isinstance(data, dict):
+        return {**data, "fetched_at": fetched_at}
+    if isinstance(data, list):
+        return {"items": data, "fetched_at": fetched_at}
     return data
 
 
