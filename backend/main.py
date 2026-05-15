@@ -1343,6 +1343,12 @@ def get_ai_briefing():
     if not api_key:
         raise HTTPException(503, "ANTHROPIC_API_KEY가 설정되지 않았습니다.")
 
+    # 캐시가 비어있으면 먼저 시장 데이터 로드
+    get_us_indices()
+    get_kospi()
+    get_commodities()
+    get_forex()
+
     snapshot = _build_market_snapshot()
     today = datetime.utcnow().strftime("%Y년 %m월 %d일")
 
