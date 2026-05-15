@@ -1,4 +1,5 @@
 import { useState } from "react";
+import GetUsIndices from "./GetUsIndices";
 import GetVixFgiScore from "./GetVixFgiScore";
 import GetFgi from "./GetFgi";
 import Vix from "./Vix";
@@ -48,6 +49,7 @@ export default function MarketDashboard() {
 
       {tab === "us" && (
         <div className="space-y-6">
+          <GetUsIndices />
           <GetVixFgiScore />
           <GetFgi />
           <Vix />

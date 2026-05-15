@@ -145,6 +145,36 @@ def get_kr_score():
     return _get_cached("kr_score", fetch)
 
 
+@app.get("/us-indices")
+def get_us_indices():
+    def fetch():
+        result = {}
+        for key, ticker, label in [
+            ("sp500",  "^GSPC", "S&P 500"),
+            ("nasdaq", "^IXIC", "NASDAQ"),
+            ("dow",    "^DJI",  "DOW"),
+        ]:
+            try:
+                hist = yf.Ticker(ticker).history(period="5d")
+                if hist.empty:
+                    result[key] = None
+                    continue
+                current = float(hist["Close"].iloc[-1])
+                prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else current
+                change = current - prev
+                result[key] = {
+                    "label": label,
+                    "value": round(current, 2),
+                    "change": round(change, 2),
+                    "change_pct": round(change / prev * 100, 2),
+                    "date": hist.index[-1].strftime("%Y-%m-%d"),
+                }
+            except Exception:
+                result[key] = None
+        return result
+    return _get_cached("us_indices", fetch)
+
+
 @app.get("/kospi")
 def get_kospi():
     def fetch():
