@@ -30,7 +30,7 @@ export default function StockIndexDashboard() {
   const [activeTab, setActiveTab] = useState("market");
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-slate-900 text-white">
 
       {/* ════════ PC (lg+): 사이드바 레이아웃 ════════ */}
       <div className="hidden lg:flex min-h-screen">
@@ -89,7 +89,7 @@ export default function StockIndexDashboard() {
       {/* ════════ 모바일: 하단 탭바 레이아웃 ════════ */}
       <div className="lg:hidden">
         {/* 모바일 헤더 */}
-        <header className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur-sm border-b border-gray-800/60 px-4 py-2.5">
+        <header className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-gray-800/60 px-4 py-2.5">
           <div className="flex items-center justify-center gap-1.5">
             <ChartBarIcon className="w-3.5 h-3.5 text-blue-400" />
             <h1 className="text-sm font-semibold text-white tracking-tight">stock-pro</h1>
