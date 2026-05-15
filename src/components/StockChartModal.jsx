@@ -105,7 +105,8 @@ export default function StockChartModal({ stock, onBack, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-start justify-center pt-10 px-4"
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-start justify-center pt-10 px-4"
+      style={{ zIndex: 60 }}
       onClick={handleOverlay}
     >
       <div
