@@ -108,11 +108,11 @@ function AccordionItem({ q, a }) {
           className={`w-4 h-4 shrink-0 text-gray-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && (
-        <p className="px-1 pb-4 text-sm text-gray-400 leading-relaxed">
-          {a}
-        </p>
-      )}
+      <div className={`grid transition-all duration-300 ease-in-out ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+        <div className="overflow-hidden">
+          <p className="px-1 pb-4 text-sm text-gray-400 leading-relaxed">{a}</p>
+        </div>
+      </div>
     </div>
   );
 }
