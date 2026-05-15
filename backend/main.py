@@ -533,6 +533,62 @@ US_STOCKS = {
     "MRK": "머크", "ORCL": "오라클",
 }
 
+# 한국어 이름 → 티커 역방향 검색용 확장 맵
+# (themes 설정의 us_candidates + 기타 주요 종목 한국어명 포함)
+_KR_NAME_TO_TICKER: dict[str, str] = {
+    # 대형주
+    "애플": "AAPL", "마이크로소프트": "MSFT", "엔비디아": "NVDA",
+    "아마존": "AMZN", "알파벳": "GOOGL", "구글": "GOOGL",
+    "메타": "META", "테슬라": "TSLA", "버크셔해서웨이": "BRK-B",
+    "비자": "V", "마스터카드": "MA", "JP모건": "JPM",
+    "유나이티드헬스": "UNH", "브로드컴": "AVGO", "일라이릴리": "LLY",
+    "엑슨모빌": "XOM", "홈디포": "HD", "P&G": "PG",
+    "존슨앤존슨": "JNJ", "코스트코": "COST", "머크": "MRK",
+    "오라클": "ORCL", "월마트": "WMT", "넷플릭스": "NFLX",
+    "어도비": "ADBE", "세일즈포스": "CRM", "뱅크오브아메리카": "BAC",
+    # 반도체
+    "AMD": "AMD", "인텔": "INTC", "퀄컴": "QCOM",
+    "마이크론": "MU", "ASML": "ASML", "TSMC": "TSM",
+    "어플라이드머티리얼즈": "AMAT", "램리서치": "LRCX", "KLA": "KLAC",
+    "텍사스인스트루먼츠": "TXN", "마벨테크놀로지": "MRVL",
+    "온세미컨덕터": "ON", "NXP세미컨덕터": "NXPI",
+    "아나로그디바이시즈": "ADI", "마이크로칩테크": "MCHP",
+    "스카이웍스": "SWKS",
+    # AI / 데이터
+    "팔란티어": "PLTR", "C3ai": "AI", "데이터독": "DDOG",
+    "스노우플레이크": "SNOW", "앤시스": "ANSS",
+    "시놉시스": "SNPS", "케이던스": "CDNS", "IBM": "IBM",
+    # 보안
+    "크라우드스트라이크": "CRWD", "팔로알토네트웍스": "PANW",
+    "지스케일러": "ZS", "포티넷": "FTNT", "옥타": "OKTA",
+    "센티넬원": "S", "사이버아크": "CYBR", "체크포인트": "CHKP",
+    # 전기/데이터센터
+    "에퀴닉스": "EQIX", "디지털리얼티": "DLR", "이튼": "ETN",
+    "GE버노바": "GEV", "컨스텔레이션에너지": "CEG",
+    # 금융
+    "골드만삭스": "GS", "모건스탠리": "MS", "블랙스톤": "BX",
+    "KKR": "KKR", "찰스슈왑": "SCHW", "인터랙티브브로커스": "IBKR",
+    # 바이오/헬스
+    "암젠": "AMGN", "길리어드": "GILD", "리제네론": "REGN",
+    "버텍스파마": "VRTX", "모더나": "MRNA", "바이오젠": "BIIB",
+    "애브비": "ABBV", "브리스톨마이어스": "BMY", "화이자": "PFE",
+    "인사이트": "INCY", "앨나일람": "ALNY",
+    # 우주/방산
+    "로켓랩": "RKLB", "AST스페이스모바일": "ASTS",
+    "록히드마틴": "LMT", "노스롭그루먼": "NOC", "RTX": "RTX",
+    "보잉": "BA", "크라토스디펜스": "KTOS", "인튜이티브머신스": "LUNR",
+    "레드와이어": "RDW",
+    # 로봇
+    "인튜이티브서지컬": "ISRG", "테라다인": "TER",
+    "코그넥스": "CGNX", "ABB": "ABB", "로크웰오토메이션": "ROK",
+    "UiPath": "PATH", "허니웰": "HON",
+    # ETF
+    "SPDR S&P 500": "SPY", "인베스코 나스닥100": "QQQ",
+    "뱅가드 미국전체": "VTI", "SPDR 다우존스": "DIA",
+    "iShares 반도체": "SOXX", "ARK 이노베이션": "ARKK",
+    "SPDR 금": "GLD",
+}
+
 
 def _get_usd_krw() -> float:
     hist = yf.Ticker("USDKRW=X").history(period="1d")
@@ -1112,7 +1168,17 @@ def search_stocks(q: str = Query(...)):
         except Exception:
             pass
 
-        # 2. 미국 — Yahoo Finance 검색 API
+        # 2. 미국 — 한국어 이름 역방향 매핑 우선 검색
+        kr_matched_tickers: list[str] = []
+        kr_matched_names:   dict[str, str] = {}
+        for kr_name, ticker in _KR_NAME_TO_TICKER.items():
+            if q_lower in kr_name.lower():
+                kr_matched_tickers.append(ticker)
+                kr_matched_names[ticker] = kr_name
+                if len(kr_matched_tickers) >= 5:
+                    break
+
+        # 3. 미국 — Yahoo Finance 검색 API (영문 티커·이름)
         try:
             yf_search_url = "https://query1.finance.yahoo.com/v1/finance/search"
             params = {"q": q_stripped, "lang": "en-US", "region": "US",
@@ -1126,11 +1192,15 @@ def search_stocks(q: str = Query(...)):
                 if item.get("quoteType") in ("EQUITY", "ETF") and "symbol" in item
             ][:5]
 
-            us_tickers = [item["symbol"] for item in quotes]
-            name_map   = {
+            # 한국어 매핑 결과와 합쳐서 중복 제거
+            yf_tickers = [item["symbol"] for item in quotes
+                          if item["symbol"] not in kr_matched_tickers]
+            yf_name_map = {
                 item["symbol"]: (item.get("longname") or item.get("shortname") or item["symbol"])
                 for item in quotes
             }
+            us_tickers = kr_matched_tickers + yf_tickers
+            name_map   = {**yf_name_map, **kr_matched_names}  # 한국어 이름 우선
 
             if us_tickers:
                 dl_arg  = us_tickers if len(us_tickers) > 1 else us_tickers[0]

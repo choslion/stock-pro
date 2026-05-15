@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
 import { MagnifyingGlassIcon, XMarkIcon } from "./ui/Icons";
+
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function ResultItem({ item }) {
   const isPos = item.change_rate > 0;
@@ -36,16 +38,59 @@ export default function SearchModal({ onClose }) {
   const [results, setResults]   = useState([]);
   const [loading, setLoading]   = useState(false);
   const [searched, setSearched] = useState(false);
-  const inputRef = useRef(null);
+  const inputRef  = useRef(null);
+  const panelRef  = useRef(null);
 
+  /* ── 오토포커스 ── */
   useEffect(() => { inputRef.current?.focus(); }, []);
 
+  /* ── 포커스 트랩: 탭이 모달 밖으로 나가지 않게 ── */
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const handleTab = (e) => {
+      if (e.key !== "Tab") return;
+      const nodes = [...panel.querySelectorAll(FOCUSABLE)].filter((n) => !n.disabled);
+      if (!nodes.length) { e.preventDefault(); return; }
+
+      const first = nodes[0];
+      const last  = nodes[nodes.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first || !panel.contains(document.activeElement)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last || !panel.contains(document.activeElement)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    /* 딤 영역 클릭 시 포커스가 body로 가지 않게 */
+    const handleOverlayPointerDown = (e) => {
+      if (!panel.contains(e.target)) e.preventDefault();
+    };
+
+    window.addEventListener("keydown", handleTab);
+    document.addEventListener("pointerdown", handleOverlayPointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleTab);
+      document.removeEventListener("pointerdown", handleOverlayPointerDown);
+    };
+  }, []);
+
+  /* ── ESC 닫기 ── */
   useEffect(() => {
     const handler = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  /* ── 검색 (400ms 디바운스) ── */
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) { setResults([]); setSearched(false); return; }
@@ -60,51 +105,69 @@ export default function SearchModal({ onClose }) {
     return () => clearTimeout(timer);
   }, [query]);
 
+  const handleOverlayClick = useCallback((e) => {
+    if (e.target === e.currentTarget) onClose();
+  }, [onClose]);
+
   return (
+    /* 딤 오버레이 — aria-hidden 없이 role=dialog 로 스크린리더 격리 */
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-14 px-4"
-      onClick={onClose}
+      onClick={handleOverlayClick}
+      /* 딤 자체는 탭 포커스 대상에서 제거 */
+      tabIndex={-1}
+      aria-hidden="false"
     >
+      {/* 모달 패널 */}
       <div
-        className="w-full max-w-md bg-gray-900 border border-gray-700/80 rounded-2xl shadow-2xl overflow-hidden animate-in"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="종목 검색"
+        className="w-full max-w-md bg-gray-900 border border-gray-700/80 rounded-2xl shadow-2xl overflow-hidden"
         style={{ animation: "slideDown 0.18s ease-out" }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* 검색 입력 */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-700/60">
-          <MagnifyingGlassIcon className="w-4 h-4 shrink-0 text-gray-500" />
+          <MagnifyingGlassIcon className="w-4 h-4 shrink-0 text-gray-500" aria-hidden="true" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="종목명 또는 티커 (예: 삼성전자, AAPL)"
+            aria-label="종목 검색어 입력"
             className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 outline-none"
           />
           {query ? (
-            <button onClick={() => setQuery("")} className="text-gray-500 hover:text-gray-300 transition-colors">
+            <button
+              onClick={() => { setQuery(""); inputRef.current?.focus(); }}
+              aria-label="검색어 지우기"
+              className="text-gray-500 hover:text-gray-300 transition-colors"
+            >
               <XMarkIcon className="w-4 h-4" />
             </button>
           ) : (
-            <button onClick={onClose} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+            <button
+              onClick={onClose}
+              aria-label="검색 닫기"
+              className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+            >
               ESC
             </button>
           )}
         </div>
 
         {/* 결과 */}
-        <div className="max-h-[60vh] overflow-y-auto">
-          {loading && (
-            <div className="flex justify-center py-8"><Spin /></div>
-          )}
+        <div className="max-h-[60vh] overflow-y-auto" role="region" aria-label="검색 결과" aria-live="polite">
+          {loading && <div className="flex justify-center py-8"><Spin /></div>}
+
           {!loading && query.trim().length < 2 && (
             <p className="text-center text-gray-600 text-xs py-8">
               2글자 이상 입력하면 검색합니다
             </p>
           )}
           {!loading && searched && results.length === 0 && (
-            <p className="text-center text-gray-500 text-sm py-8">
-              검색 결과가 없습니다
-            </p>
+            <p className="text-center text-gray-500 text-sm py-8">검색 결과가 없습니다</p>
           )}
           {!loading && results.map((item) => (
             <ResultItem key={`${item.market}-${item.ticker}`} item={item} />
