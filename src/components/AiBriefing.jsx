@@ -37,7 +37,7 @@ export default function AiBriefing() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (error) return null;
+  if (error) return <div className="mb-6" />;
 
   return (
     <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 to-slate-900/60 px-5 py-4 mb-6">
@@ -54,15 +54,17 @@ export default function AiBriefing() {
       </div>
 
       {/* 본문 */}
-      {loading ? (
-        <div className="space-y-2">
-          <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
-          <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
-          <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-4/6" />
-        </div>
-      ) : (
-        <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{briefing}</p>
-      )}
+      <div style={{ minHeight: 60 }}>
+        {loading ? (
+          <div className="space-y-2 pt-1">
+            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
+            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
+            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-4/6" />
+          </div>
+        ) : (
+          <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{briefing}</p>
+        )}
+      </div>
     </div>
   );
 }
