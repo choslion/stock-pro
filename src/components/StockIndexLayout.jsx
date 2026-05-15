@@ -6,7 +6,8 @@ import MarketTrends from "./MarketTrends";
 import Watchlist from "./Watchlist";
 import ThemeSectors from "./ThemeSectors";
 import HelpGuide from "./HelpGuide";
-import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon } from "./ui/Icons";
+import SearchModal from "./SearchModal";
+import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon } from "./ui/Icons";
 
 const NAV_TABS = [
   { id: "market",    label: "시장",   icon: ChartBarIcon   },
@@ -38,10 +39,12 @@ function SectionContent({ activeTab }) {
 }
 
 export default function StockIndexDashboard() {
-  const [activeTab, setActiveTab] = useState("market");
+  const [activeTab, setActiveTab]     = useState("market");
+  const [showSearch, setShowSearch]   = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
+      {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
 
       {/* ════════ PC (lg+): 사이드바 레이아웃 ════════ */}
       <div className="hidden lg:flex min-h-screen">
@@ -57,6 +60,14 @@ export default function StockIndexDashboard() {
               <p className="text-sm font-bold tracking-tight text-white">stock-pro</p>
             </div>
             <p className="text-[11px] text-gray-600 mt-0.5 pl-6">실시간 시장 데이터</p>
+            <button
+              onClick={() => setShowSearch(true)}
+              className="mt-3 w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg
+                         bg-gray-800/60 hover:bg-gray-700/60 transition-colors text-gray-500 hover:text-gray-300"
+            >
+              <MagnifyingGlassIcon className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-xs">종목 검색</span>
+            </button>
           </div>
 
           {/* 네비게이션 */}
@@ -101,9 +112,19 @@ export default function StockIndexDashboard() {
       <div className="lg:hidden">
         {/* 모바일 헤더 */}
         <header className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-gray-800/60 px-4 py-2.5">
-          <div className="flex items-center justify-center gap-1.5">
-            <ChartBarIcon className="w-3.5 h-3.5 text-blue-400" />
-            <h1 className="text-sm font-semibold text-white tracking-tight">stock-pro</h1>
+          <div className="flex items-center justify-between">
+            <div className="w-8" />
+            <div className="flex items-center gap-1.5">
+              <ChartBarIcon className="w-3.5 h-3.5 text-blue-400" />
+              <h1 className="text-sm font-semibold text-white tracking-tight">stock-pro</h1>
+            </div>
+            <button
+              onClick={() => setShowSearch(true)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+              aria-label="종목 검색"
+            >
+              <MagnifyingGlassIcon className="w-4 h-4" />
+            </button>
           </div>
         </header>
 

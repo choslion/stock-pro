@@ -1061,6 +1061,106 @@ def get_us_ranking(type: str = Query("amount"), limit: int = Query(10)):
     return _get_cached(f"us_ranking_{type}", fetch)
 
 
+def _cached_krx_listing() -> pd.DataFrame:
+    """KRX 전체 종목 목록 — 검색용, 1시간 캐시."""
+    now = time.time()
+    entry = _cache.get("_krx_full")
+    if entry and now - entry["ts"] < 3600:
+        return entry["data"]
+    df = fdr.StockListing("KRX")
+    if "ChagesRatio" in df.columns:
+        df = df.rename(columns={"ChagesRatio": "ChgRatio"})
+    for col in ["Close", "ChgRatio"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    _cache["_krx_full"] = {"data": df, "ts": now}
+    return df
+
+
+@app.get("/search")
+def search_stocks(q: str = Query(...)):
+    q_stripped = q.strip()
+    if not q_stripped:
+        return {"items": []}
+
+    cache_key = f"search_{q_stripped.lower()}"
+
+    def fetch():
+        results = []
+        q_lower = q_stripped.lower()
+
+        # 1. 국내 — KRX 목록에서 이름·코드 검색
+        try:
+            kr_df = _cached_krx_listing()
+            code_col = next((c for c in ["Code", "Symbol"] if c in kr_df.columns), None)
+            name_col = "Name" if "Name" in kr_df.columns else None
+            if code_col and name_col:
+                mask = (
+                    kr_df[name_col].str.lower().str.contains(q_lower, na=False) |
+                    kr_df[code_col].str.lower().str.contains(q_lower, na=False)
+                )
+                for _, row in kr_df[mask].head(5).iterrows():
+                    close = row.get("Close")
+                    chg   = row.get("ChgRatio")
+                    results.append({
+                        "market":      "KR",
+                        "ticker":      str(row.get(code_col, "")),
+                        "name":        str(row.get(name_col, "")),
+                        "price":       int(close) if pd.notna(close) else 0,
+                        "change_rate": round(float(chg), 2) if pd.notna(chg) else 0.0,
+                    })
+        except Exception:
+            pass
+
+        # 2. 미국 — Yahoo Finance 검색 API
+        try:
+            yf_search_url = "https://query1.finance.yahoo.com/v1/finance/search"
+            params = {"q": q_stripped, "lang": "en-US", "region": "US",
+                      "quotesCount": 8, "newsCount": 0}
+            with httpx.Client(timeout=5) as client:
+                resp = client.get(yf_search_url, params=params,
+                                  headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+            quotes = [
+                item for item in resp.json().get("quotes", [])
+                if item.get("quoteType") in ("EQUITY", "ETF") and "symbol" in item
+            ][:5]
+
+            us_tickers = [item["symbol"] for item in quotes]
+            name_map   = {
+                item["symbol"]: (item.get("longname") or item.get("shortname") or item["symbol"])
+                for item in quotes
+            }
+
+            if us_tickers:
+                dl_arg  = us_tickers if len(us_tickers) > 1 else us_tickers[0]
+                raw     = yf.download(dl_arg, period="2d", auto_adjust=True, progress=False)
+                close_df = raw["Close"] if not raw.empty else pd.DataFrame()
+
+                for ticker in us_tickers:
+                    try:
+                        c = (close_df.dropna() if len(us_tickers) == 1
+                             else close_df[ticker].dropna() if ticker in close_df.columns
+                             else pd.Series())
+                        price = round(float(c.iloc[-1]), 2) if len(c) >= 1 else 0.0
+                        chg   = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
+                        results.append({
+                            "market":      "US",
+                            "ticker":      ticker,
+                            "name":        name_map.get(ticker, ticker),
+                            "price":       price,
+                            "change_rate": chg,
+                        })
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        return results
+
+    return _get_cached(cache_key, fetch)
+
+
 @app.get("/kr-theme-stocks")
 def get_kr_theme_stocks(keyword: str = Query(...)):
     import re as _re
