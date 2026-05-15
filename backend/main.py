@@ -1326,8 +1326,14 @@ def get_ai_briefing():
 
     cache_key = "ai_briefing"
     now = time.time()
+
+    # 국내장(UTC 00-07) · 미장(UTC 14-22) → 2시간 캐시, 그 외 장외 → 6시간 캐시
+    utc_hour = datetime.utcnow().hour
+    is_market_hours = (0 <= utc_hour < 7) or (14 <= utc_hour < 22)
+    ttl = 7200 if is_market_hours else 21600
+
     entry = _cache.get(cache_key)
-    if entry and now - entry["ts"] < 3600:
+    if entry and now - entry["ts"] < ttl:
         return entry["data"]
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
