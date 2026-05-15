@@ -1,7 +1,6 @@
 import { useState } from "react";
 import MarketDashboard from "./MarketDashboard";
 import MarketTrends from "./MarketTrends";
-import EtfList from "./EtfList";
 import Watchlist from "./Watchlist";
 import ThemeSectors from "./ThemeSectors";
 import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon } from "./ui/Icons";
@@ -18,12 +17,7 @@ function SectionContent({ activeTab }) {
     <>
       {activeTab === "market" && <MarketDashboard />}
       {activeTab === "chart"     && <MarketTrends />}
-      {activeTab === "theme"     && (
-        <div className="space-y-6">
-          <ThemeSectors />
-          <EtfList />
-        </div>
-      )}
+      {activeTab === "theme"     && <ThemeSectors />}
       {activeTab === "watchlist" && <Watchlist />}
     </>
   );
