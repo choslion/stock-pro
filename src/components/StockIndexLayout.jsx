@@ -18,10 +18,10 @@ const NAV_TABS = [
 ];
 
 const TAB_ANIM = {
-  initial:  { opacity: 0, y: 14 },
-  animate:  { opacity: 1, y: 0  },
-  exit:     { opacity: 0, y: -6 },
-  transition: { duration: 0.22, ease: "easeOut" },
+  initial:    { opacity: 0 },
+  animate:    { opacity: 1 },
+  exit:       { opacity: 0 },
+  transition: { duration: 0.12 },
 };
 
 function SectionContent({ activeTab }) {
