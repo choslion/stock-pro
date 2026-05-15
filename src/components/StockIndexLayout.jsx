@@ -3,13 +3,15 @@ import MarketDashboard from "./MarketDashboard";
 import MarketTrends from "./MarketTrends";
 import Watchlist from "./Watchlist";
 import ThemeSectors from "./ThemeSectors";
-import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon } from "./ui/Icons";
+import HelpGuide from "./HelpGuide";
+import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon } from "./ui/Icons";
 
 const NAV_TABS = [
-  { id: "market",    label: "시장",  icon: ChartBarIcon   },
-  { id: "chart",     label: "차트",  icon: TrendingUpIcon },
-  { id: "theme",     label: "테마",  icon: GridIcon       },
-  { id: "watchlist", label: "관심",  icon: BookmarkIcon   },
+  { id: "market",    label: "시장",   icon: ChartBarIcon   },
+  { id: "chart",     label: "차트",   icon: TrendingUpIcon },
+  { id: "theme",     label: "테마",   icon: GridIcon       },
+  { id: "watchlist", label: "관심",   icon: BookmarkIcon   },
+  { id: "help",      label: "도움말", icon: BookOpenIcon   },
 ];
 
 function SectionContent({ activeTab }) {
@@ -19,6 +21,7 @@ function SectionContent({ activeTab }) {
       {activeTab === "chart"     && <MarketTrends />}
       {activeTab === "theme"     && <ThemeSectors />}
       {activeTab === "watchlist" && <Watchlist />}
+      {activeTab === "help"      && <HelpGuide />}
     </>
   );
 }
