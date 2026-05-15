@@ -328,37 +328,43 @@ def get_stock_ranking(
 @app.get("/sectors")
 def get_sectors(market: str = Query("KOSPI")):
     def fetch():
-        df = _get_listing(market)
-        if df.empty:
+        import requests as _req
+        from bs4 import BeautifulSoup as _BS
+
+        url = "https://finance.naver.com/sise/sise_group.naver?type=upjong"
+        res = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        soup = _BS(res.content, "html.parser", from_encoding="euc-kr")
+        rows = soup.select("table.type_1 tr")
+
+        result = []
+        for row in rows:
+            tds = row.find_all("td")
+            if len(tds) < 4:
+                continue
+            name = tds[0].get_text(strip=True)
+            chg_str = tds[1].get_text(strip=True).replace("%", "").replace("+", "")
+            try:
+                change_rate = float(chg_str)
+            except ValueError:
+                continue
+            try:
+                total  = int(tds[2].get_text(strip=True))
+                rising = int(tds[3].get_text(strip=True))
+            except ValueError:
+                total, rising = 0, 0
+
+            if name:
+                result.append({
+                    "name": name,
+                    "change_rate": round(change_rate, 2),
+                    "total": total,
+                    "rising": rising,
+                })
+
+        if not result:
             raise HTTPException(503, "업종 데이터를 가져올 수 없습니다.")
 
-        sector_col = next((c for c in ["Dept", "Sector", "Industry", "업종"] if c in df.columns), None)
-        if not sector_col:
-            raise HTTPException(503, "업종 정보가 없습니다.")
-
-        df = df[df[sector_col].notna() & (df[sector_col] != "")].copy()
-
-        agg = (
-            df.groupby(sector_col)["ChgRatio"]
-            .agg(
-                change_rate="mean",
-                total="count",
-                rising=lambda x: int((x > 0).sum()),
-            )
-            .reset_index()
-            .rename(columns={sector_col: "name"})
-            .sort_values("change_rate", ascending=False)
-        )
-
-        return [
-            {
-                "name": row["name"],
-                "change_rate": round(float(row["change_rate"]), 2) if pd.notna(row["change_rate"]) else 0.0,
-                "total": int(row["total"]),
-                "rising": int(row["rising"]),
-            }
-            for _, row in agg.iterrows()
-        ]
+        return sorted(result, key=lambda x: x["change_rate"], reverse=True)
 
     return _get_cached(f"sectors_{market}", fetch)
 
