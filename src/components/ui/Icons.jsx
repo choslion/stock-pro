@@ -131,6 +131,15 @@ export function ChevronDownIcon({ className = "w-4 h-4" }) {
   );
 }
 
+export function ClockFaceIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg {...BASE} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
+    </svg>
+  );
+}
+
 export function LightBulbIcon({ className = "w-4 h-4" }) {
   return (
     <svg {...BASE} className={className}>
