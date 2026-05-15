@@ -120,7 +120,7 @@ export default function GetVixFgiScore() {
           className="h-full rounded-full"
           style={{
             width: smoothWidth,
-            background: `linear-gradient(to right, #22c55e, #eab308, #f97316, #ef4444)`,
+            background: `linear-gradient(to right, #22c55e, #84cc16, #eab308, #f97316, #ef4444)`,
           }}
         />
       </div>
