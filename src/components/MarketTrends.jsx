@@ -1,6 +1,5 @@
 import { useState } from "react";
 import Card from "./ui/Card";
-import ScrollTabs from "./ui/ScrollTabs";
 import StockRanking from "./StockRanking";
 import InvestorTrends from "./InvestorTrends";
 import Commodities from "./Commodities";
@@ -20,13 +19,20 @@ export default function MarketTrends() {
 
   return (
     <Card>
-      <div className="mb-4 -mt-1">
-        <ScrollTabs
-          tabs={TABS}
-          activeId={activeTab}
-          onChange={setActiveTab}
-          ariaLabel="차트 탭"
-        />
+      <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b border-gray-700 mb-4 -mt-1">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`shrink-0 px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? "text-white border-b-2 border-blue-400"
+                : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {activeTab === "ranking"     && <StockRanking />}
