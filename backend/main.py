@@ -1323,6 +1323,52 @@ def _build_market_snapshot() -> str:
     return "\n".join(lines) if lines else "현재 시장 데이터를 불러오는 중입니다."
 
 
+@app.get("/chart")
+def get_chart(
+    ticker: str = Query(...),
+    market: str = Query("US"),
+    period: str = Query("1m"),
+):
+    import datetime as _dt
+
+    period_map = {"1w": "7d", "1m": "1mo", "3m": "3mo", "6m": "6mo", "1y": "1y"}
+    days_map   = {"1w": 10,   "1m": 40,    "3m": 100,   "6m": 200,   "1y": 380}
+    yf_period  = period_map.get(period, "1mo")
+    days       = days_map.get(period, 40)
+
+    cache_key = f"chart_{ticker}_{market}_{period}"
+
+    def fetch():
+        items = []
+        if market == "KR":
+            end   = _dt.date.today()
+            start = end - _dt.timedelta(days=days)
+            df = fdr.DataReader(ticker, str(start), str(end))
+            if df.empty:
+                return []
+            for idx, row in df.iterrows():
+                close = row.get("Close")
+                if close is not None and pd.notna(close):
+                    items.append({"time": str(idx.date()), "value": round(float(close), 2)})
+        else:
+            hist = yf.Ticker(ticker).history(period=yf_period)
+            if hist.empty:
+                return []
+            for idx, row in hist.iterrows():
+                close = row.get("Close")
+                if close is not None and pd.notna(close):
+                    items.append({"time": str(idx.date()), "value": round(float(close), 2)})
+        return items
+
+    entry = _cache.get(cache_key)
+    now = time.time()
+    if entry and now - entry["ts"] < 300:
+        return {"items": entry["data"]}
+    data = fetch()
+    _cache[cache_key] = {"data": data, "ts": now}
+    return {"items": data}
+
+
 @app.get("/ai-briefing")
 def get_ai_briefing():
     import anthropic as _anthropic

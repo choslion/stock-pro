@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
+import StockChartModal from "./StockChartModal";
 import { MagnifyingGlassIcon, XMarkIcon } from "./ui/Icons";
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function ResultItem({ item }) {
+function ResultItem({ item, onClick }) {
   const isPos = item.change_rate > 0;
   const isNeg = item.change_rate < 0;
   const rateColor = isPos ? "text-red-400" : isNeg ? "text-blue-400" : "text-gray-500";
@@ -14,7 +15,10 @@ function ResultItem({ item }) {
     : (item.price ? "$" + item.price.toFixed(2) : "-");
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800/60 transition-colors border-b border-gray-800/40 last:border-0">
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-800/60 transition-colors border-b border-gray-800/40 last:border-0 text-left"
+    >
       <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded
         ${item.market === "KR" ? "bg-blue-900/60 text-blue-300" : "bg-yellow-900/60 text-yellow-300"}`}>
         {item.market}
@@ -29,15 +33,16 @@ function ResultItem({ item }) {
           {isPos ? "+" : ""}{item.change_rate.toFixed(2)}%
         </p>
       </div>
-    </div>
+    </button>
   );
 }
 
 export default function SearchModal({ onClose }) {
-  const [query, setQuery]       = useState("");
-  const [results, setResults]   = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [query, setQuery]               = useState("");
+  const [results, setResults]           = useState([]);
+  const [loading, setLoading]           = useState(false);
+  const [searched, setSearched]         = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
   const inputRef  = useRef(null);
   const panelRef  = useRef(null);
 
@@ -170,7 +175,7 @@ export default function SearchModal({ onClose }) {
             <p className="text-center text-gray-500 text-sm py-8">검색 결과가 없습니다</p>
           )}
           {!loading && results.map((item) => (
-            <ResultItem key={`${item.market}-${item.ticker}`} item={item} />
+            <ResultItem key={`${item.market}-${item.ticker}`} item={item} onClick={() => setSelectedStock(item)} />
           ))}
         </div>
       </div>
@@ -182,5 +187,13 @@ export default function SearchModal({ onClose }) {
         }
       `}</style>
     </div>
+
+    {selectedStock && (
+      <StockChartModal
+        stock={selectedStock}
+        onBack={() => setSelectedStock(null)}
+        onClose={onClose}
+      />
+    )}
   );
 }
