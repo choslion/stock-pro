@@ -55,7 +55,7 @@ export default function StockRanking() {
           setStocks(res.data.stocks ?? []);
           setUsdKrw(res.data.usd_krw ?? null);
         } else {
-          setStocks(res.data);
+          setStocks(res.data.items ?? res.data ?? []);
           setUsdKrw(null);
         }
         setFetchedAt(new Date());

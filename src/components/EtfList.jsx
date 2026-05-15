@@ -5,6 +5,7 @@ import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
 import ScrollTabs from "./ui/ScrollTabs";
+import { BuildingLibraryIcon } from "./ui/Icons";
 
 const FILTERS = [
   { id: "amount",  label: "거래대금" },
@@ -97,7 +98,7 @@ export default function EtfList() {
     axiosInstance
       .get("/etf", { params: { type: filter } })
       .then((res) => {
-        setStocks(res.data ?? []);
+        setStocks(res.data.items ?? res.data ?? []);
         setFetchedAt(new Date());
       })
       .catch((err) => setError(parseError(err)))
@@ -105,7 +106,7 @@ export default function EtfList() {
   }, [filter, retryCount]);
 
   return (
-    <Card title="🏦 국내 ETF" subtitle="국내 상장 ETF 순위">
+    <Card title="국내 ETF" subtitle="국내 상장 ETF 순위" icon={BuildingLibraryIcon}>
       <div className="flex items-center justify-between mb-2 min-h-[16px]">
         {fetchedAt && (
           <p className="text-xs text-gray-500 ml-auto">
