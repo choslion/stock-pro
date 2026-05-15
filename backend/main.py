@@ -591,6 +591,163 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
     return _get_cached(f"etf_{type}", fetch)
 
 
+def _etf_kr_rows(df, type: str, limit: int):
+    """ETF/KR DataFrame → 공통 정렬·직렬화 로직."""
+    price_col = next((c for c in ["Price", "Close"] if c in df.columns), None)
+    rate_col  = next((c for c in ["ChangeRate", "ChagesRatio", "ChgRatio"] if c in df.columns), None)
+
+    for col in ["Volume", "Amount", price_col, rate_col]:
+        if col and col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    if "Volume" in df.columns:
+        df = df[df["Volume"].fillna(0) > 0].copy()
+
+    chg = df[rate_col].fillna(0.0) if rate_col else pd.Series(0.0, index=df.index)
+
+    if type == "volume" and "Volume" in df.columns:
+        sorted_df = df.sort_values("Volume", ascending=False)
+    elif type == "rising":
+        sorted_df = df[chg > 0].sort_values(rate_col or "Volume", ascending=False)
+    elif type == "falling":
+        sorted_df = df[chg < 0].sort_values(rate_col or "Volume", ascending=True)
+    else:
+        sort_col = "Amount" if "Amount" in df.columns else "Volume"
+        sorted_df = df.sort_values(sort_col, ascending=False)
+
+    result = []
+    for rank, (_, row) in enumerate(sorted_df.head(limit).iterrows(), 1):
+        price_val = row.get(price_col) if price_col else None
+        rate_val  = row.get(rate_col)  if rate_col  else None
+        vol_val   = row.get("Volume")
+        amt_val   = row.get("Amount")
+        result.append({
+            "rank": rank,
+            "ticker": str(row.get("Symbol", row.get("Code", ""))),
+            "name": str(row.get("Name", "")),
+            "price": int(price_val) if price_val is not None and pd.notna(price_val) else 0,
+            "change_rate": round(float(rate_val), 2) if rate_val is not None and pd.notna(rate_val) else 0.0,
+            "volume": int(vol_val) if vol_val is not None and pd.notna(vol_val) else 0,
+            "amount": int(amt_val) if amt_val is not None and pd.notna(amt_val) else 0,
+        })
+    return result
+
+
+_OVERSEAS_KWS = [
+    "미국", "나스닥", "S&P", "차이나", "일본", "유럽", "인도",
+    "베트남", "홍콩", "MSCI", "선진국", "신흥국", "글로벌",
+    "WTI", "원유", "달러인덱스", "브라질", "대만",
+]
+
+
+@app.get("/etf-kr-overseas")
+def get_etf_kr_overseas(type: str = Query("amount"), limit: int = Query(20)):
+    def fetch():
+        df = fdr.StockListing("ETF/KR")
+        if df.empty:
+            raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
+        name_col = next((c for c in ["Name"] if c in df.columns), None)
+        if name_col:
+            mask = df[name_col].apply(lambda n: any(kw in str(n) for kw in _OVERSEAS_KWS))
+            df = df[mask].copy()
+        return _etf_kr_rows(df, type, limit)
+    return _get_cached(f"etf_kr_overseas_{type}", fetch)
+
+
+_US_ETFS = [
+    ("SPY",  "SPDR S&P 500"),
+    ("QQQ",  "Invesco 나스닥100"),
+    ("IWM",  "iShares 러셀2000"),
+    ("VTI",  "Vanguard 미국전체"),
+    ("DIA",  "SPDR 다우존스"),
+    ("XLK",  "기술 섹터"),
+    ("XLF",  "금융 섹터"),
+    ("XLV",  "헬스케어 섹터"),
+    ("XLE",  "에너지 섹터"),
+    ("XLI",  "산업재 섹터"),
+    ("XLY",  "임의소비재 섹터"),
+    ("XLC",  "커뮤니케이션 섹터"),
+    ("XLP",  "필수소비재 섹터"),
+    ("XLB",  "소재 섹터"),
+    ("XLRE", "부동산 섹터"),
+    ("XLU",  "유틸리티 섹터"),
+    ("GLD",  "SPDR 금"),
+    ("SLV",  "iShares 은"),
+    ("TLT",  "iShares 장기국채"),
+    ("AGG",  "iShares 미국채권"),
+    ("HYG",  "iShares 하이일드"),
+    ("EEM",  "iShares 신흥시장"),
+    ("VEA",  "Vanguard 선진시장"),
+    ("EWJ",  "iShares 일본"),
+    ("FXI",  "iShares 중국대형"),
+    ("SOXX", "iShares 반도체"),
+    ("ARKK", "ARK 이노베이션"),
+]
+
+
+@app.get("/etf-us")
+def get_etf_us(type: str = Query("amount"), limit: int = Query(20)):
+    def fetch():
+        tickers  = [t for t, _ in _US_ETFS]
+        name_map = {t: n for t, n in _US_ETFS}
+
+        raw = yf.download(tickers, period="2d", auto_adjust=True, progress=False)
+        if raw.empty:
+            raise HTTPException(503, "미국 ETF 데이터를 가져올 수 없습니다.")
+
+        close  = raw["Close"]
+        volume = raw["Volume"]
+
+        rows = []
+        for ticker in tickers:
+            try:
+                c = close[ticker].dropna()
+                v = volume[ticker].dropna()
+                if len(c) < 1:
+                    continue
+                price = float(c.iloc[-1])
+                vol   = float(v.iloc[-1]) if len(v) >= 1 else 0.0
+                chg   = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
+                rows.append({
+                    "ticker": ticker,
+                    "name": name_map[ticker],
+                    "price": round(price, 2),
+                    "change_rate": chg,
+                    "volume": int(vol),
+                    "amount": int(price * vol),
+                })
+            except Exception:
+                continue
+
+        if not rows:
+            raise HTTPException(503, "미국 ETF 데이터를 가져올 수 없습니다.")
+
+        df = pd.DataFrame(rows)
+        if type == "volume":
+            df = df.sort_values("volume", ascending=False)
+        elif type == "rising":
+            df = df[df["change_rate"] > 0].sort_values("change_rate", ascending=False)
+        elif type == "falling":
+            df = df[df["change_rate"] < 0].sort_values("change_rate")
+        else:
+            df = df.sort_values("amount", ascending=False)
+
+        result = []
+        for rank, (_, row) in enumerate(df.head(limit).iterrows(), 1):
+            result.append({
+                "rank": rank,
+                "ticker": row["ticker"],
+                "name": row["name"],
+                "price": row["price"],
+                "change_rate": row["change_rate"],
+                "volume": int(row["volume"]),
+                "amount": int(row["amount"]),
+            })
+        return result
+
+    return _get_cached(f"etf_us_{type}", fetch)
+
+
 @app.get("/watchlist")
 def get_watchlist(kr: str = Query(""), us: str = Query(""), kr_names: str = Query("")):
     kr_tickers = [t.strip() for t in kr.split(",") if t.strip()] if kr else []
