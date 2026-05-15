@@ -1,9 +1,5 @@
 import { useState } from "react";
-import Vix from "./Vix";
-import GetRangeVix from "./GetRangeVix";
-import GetSp500 from "./GetSp500";
-import GetFgi from "./GetFgi";
-import GetVixFgiScore from "./GetVixFgiScore";
+import MarketDashboard from "./MarketDashboard";
 import MarketTrends from "./MarketTrends";
 import EtfList from "./EtfList";
 import Watchlist from "./Watchlist";
@@ -20,15 +16,7 @@ const NAV_TABS = [
 function SectionContent({ activeTab }) {
   return (
     <>
-      {activeTab === "market" && (
-        <div className="space-y-6">
-          <GetVixFgiScore />
-          <GetFgi />
-          <Vix />
-          <GetRangeVix />
-          <GetSp500 />
-        </div>
-      )}
+      {activeTab === "market" && <MarketDashboard />}
       {activeTab === "chart"     && <MarketTrends />}
       {activeTab === "theme"     && (
         <div className="space-y-6">
