@@ -5,6 +5,7 @@ import Vix from "./Vix";
 import GetRangeVix from "./GetRangeVix";
 import GetSp500 from "./GetSp500";
 import GetKospi from "./GetKospi";
+import GetKrScore from "./GetKrScore";
 import TrendingSectors from "./TrendingSectors";
 import Card from "./ui/Card";
 import { ChartBarIcon } from "./ui/Icons";
@@ -38,6 +39,7 @@ export default function MarketDashboard() {
       {tab === "kr" && (
         <div className="space-y-6">
           <GetKospi />
+          <GetKrScore />
           <Card title="업종별 동향" subtitle="KOSPI 업종 등락률" icon={ChartBarIcon}>
             <TrendingSectors />
           </Card>

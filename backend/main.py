@@ -98,6 +98,53 @@ def fetch_vix_latest() -> tuple[float, str]:
     return float(row["Close"]), row.name.strftime("%Y-%m-%d")
 
 
+@app.get("/kr-score")
+def get_kr_score():
+    """KOSPI 실현변동성 + 추세 + 업종폭으로 국내 시장 심리 점수(0~100) 계산"""
+    def fetch():
+        # 1. KOSPI 3개월 히스토리
+        hist = yf.Ticker("^KS11").history(period="3mo")
+        if hist.empty:
+            raise HTTPException(503, "KOSPI 데이터를 가져올 수 없습니다.")
+
+        current = float(hist["Close"].iloc[-1])
+
+        # 실현변동성 (20일 연환산) — VKOSPI 근사값으로 사용
+        daily_ret = hist["Close"].pct_change().dropna()
+        realized_vol = float(daily_ret.tail(20).std()) * (252 ** 0.5) * 100
+        vol_score = max(0.0, min(100.0, (35 - realized_vol) / 25 * 100))
+
+        # 추세 점수 (현재 vs 20일 이동평균)
+        ma20 = float(hist["Close"].tail(20).mean())
+        deviation = (current - ma20) / ma20 * 100
+        momentum_score = max(0.0, min(100.0, deviation / 5 * 50 + 50))
+
+        # 업종폭 점수 (KOSPI 상승 종목 비율)
+        try:
+            df = _get_listing("KOSPI")
+            rising = int((df["ChgRatio"] > 0).sum())
+            breadth_score = rising / len(df) * 100 if not df.empty else 50.0
+        except Exception:
+            breadth_score = 50.0
+
+        score = round(0.40 * vol_score + 0.35 * momentum_score + 0.25 * breadth_score, 1)
+
+        if score <= 20:   rating = "극단적 공포"
+        elif score <= 40: rating = "공포"
+        elif score <= 60: rating = "중립"
+        elif score <= 80: rating = "탐욕"
+        else:             rating = "극단적 탐욕"
+
+        return {
+            "score": score,
+            "rating": rating,
+            "realized_vol": round(realized_vol, 2),
+            "momentum_pct": round(deviation, 2),
+            "breadth_pct": round(breadth_score, 1),
+        }
+    return _get_cached("kr_score", fetch)
+
+
 @app.get("/kospi")
 def get_kospi():
     def fetch():
