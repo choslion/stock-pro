@@ -54,12 +54,14 @@ export default function AiBriefing() {
       </div>
 
       {/* 본문 */}
-      <div style={{ minHeight: 60 }}>
+      <div style={{ minHeight: 100 }}>
         {loading ? (
-          <div className="space-y-2 pt-1">
+          <div className="space-y-2.5 pt-1">
+            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
             <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
             <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
-            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-4/6" />
+            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
+            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-3/6" />
           </div>
         ) : (
           <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{briefing}</p>
