@@ -40,9 +40,7 @@ export default function AiBriefing() {
   if (error) return null;
 
   return (
-    <div className="relative rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 to-slate-900/60 px-5 py-4 mb-6 overflow-hidden">
-      {/* 배경 글로우 */}
-      <div className="absolute -top-6 -right-6 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+    <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 to-slate-900/60 px-5 py-4 mb-6">
 
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">

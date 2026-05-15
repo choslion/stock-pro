@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GetUsIndices from "./GetUsIndices";
 import GetVixFgiScore from "./GetVixFgiScore";
 import GetRangeVix from "./GetRangeVix";
@@ -16,11 +16,18 @@ const TABS = [
 ];
 
 export default function MarketDashboard() {
-  const [tab, setTab] = useState("kr");
+  const [tab, setTab]             = useState("kr");
+  const [showBriefing, setShowBriefing] = useState(false);
+
+  // 탭 전환 애니메이션(220ms) 끝난 뒤 마운트
+  useEffect(() => {
+    const t = setTimeout(() => setShowBriefing(true), 350);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div>
-      <AiBriefing />
+      {showBriefing && <AiBriefing />}
       <div className="flex gap-1 mb-6 border-b border-gray-700">
         {TABS.map((t) => (
           <button
