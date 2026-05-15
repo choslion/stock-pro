@@ -130,3 +130,12 @@ export function ChevronDownIcon({ className = "w-4 h-4" }) {
     </svg>
   );
 }
+
+export function LightBulbIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg {...BASE} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.355a3.375 3.375 0 01-3 0m3 0v-.75a3.375 3.375 0 00-3-3.353V15m0 0a6 6 0 110-12 6 6 0 010 12z" />
+    </svg>
+  );
+}

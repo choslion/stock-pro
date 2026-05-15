@@ -6,6 +6,7 @@ import {
   ActivityIcon,
   CurrencyDollarIcon,
   ChevronDownIcon,
+  LightBulbIcon,
 } from "./ui/Icons";
 
 const SECTIONS = [
@@ -120,9 +121,10 @@ function AccordionItem({ q, a }) {
 export default function HelpGuide() {
   return (
     <div className="space-y-4">
-      <p className="text-xs text-gray-500 px-1">
-        궁금한 용어를 눌러서 확인해봐
-      </p>
+      <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
+        <LightBulbIcon className="w-4 h-4 shrink-0 text-blue-400" />
+        <p className="text-sm text-blue-300">궁금한 용어를 눌러서 확인해봐</p>
+      </div>
       {SECTIONS.map((section) => {
         const Icon = section.icon;
         return (
