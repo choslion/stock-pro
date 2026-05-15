@@ -24,14 +24,17 @@ export default function AiBriefing() {
   const [error, setError]         = useState(false);
 
   useEffect(() => {
-    axiosInstance
-      .get("/ai-briefing")
-      .then((res) => {
-        setBriefing(res.data.briefing ?? "");
-        setFetchedAt(res.data.fetched_at ?? null);
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+    const timer = setTimeout(() => {
+      axiosInstance
+        .get("/ai-briefing")
+        .then((res) => {
+          setBriefing(res.data.briefing ?? "");
+          setFetchedAt(res.data.fetched_at ?? null);
+        })
+        .catch(() => setError(true))
+        .finally(() => setLoading(false));
+    }, 400);
+    return () => clearTimeout(timer);
   }, []);
 
   if (error) return null;
