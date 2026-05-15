@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+const MotionDiv = motion.div;
 import MarketDashboard from "./MarketDashboard";
 import MarketTrends from "./MarketTrends";
 import Watchlist from "./Watchlist";
@@ -14,15 +16,24 @@ const NAV_TABS = [
   { id: "help",      label: "도움말", icon: BookOpenIcon   },
 ];
 
+const TAB_ANIM = {
+  initial:  { opacity: 0, y: 14 },
+  animate:  { opacity: 1, y: 0  },
+  exit:     { opacity: 0, y: -6 },
+  transition: { duration: 0.22, ease: "easeOut" },
+};
+
 function SectionContent({ activeTab }) {
   return (
-    <>
-      {activeTab === "market" && <MarketDashboard />}
-      {activeTab === "chart"     && <MarketTrends />}
-      {activeTab === "theme"     && <ThemeSectors />}
-      {activeTab === "watchlist" && <Watchlist />}
-      {activeTab === "help"      && <HelpGuide />}
-    </>
+    <AnimatePresence mode="wait">
+      <MotionDiv key={activeTab} {...TAB_ANIM}>
+        {activeTab === "market"    && <MarketDashboard />}
+        {activeTab === "chart"     && <MarketTrends />}
+        {activeTab === "theme"     && <ThemeSectors />}
+        {activeTab === "watchlist" && <Watchlist />}
+        {activeTab === "help"      && <HelpGuide />}
+      </MotionDiv>
+    </AnimatePresence>
   );
 }
 

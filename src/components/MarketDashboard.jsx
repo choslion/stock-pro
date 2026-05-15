@@ -1,4 +1,12 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+const MotionDiv = motion.div;
+const TAB_ANIM = {
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0 },
+  exit:    { opacity: 0, y: -6 },
+  transition: { duration: 0.2, ease: "easeOut" },
+};
 import GetUsIndices from "./GetUsIndices";
 import GetVixFgiScore from "./GetVixFgiScore";
 import GetRangeVix from "./GetRangeVix";
@@ -35,26 +43,27 @@ export default function MarketDashboard() {
         ))}
       </div>
 
-      {tab === "kr" && (
-        <div className="space-y-6">
-          <GetKospi />
-          <GetKrScore />
-          <Card title="업종별 동향" subtitle="KOSPI 업종 등락률" icon={ChartBarIcon}>
-            <TrendingSectors />
-          </Card>
-        </div>
-      )}
-
-      {tab === "us" && (
-        <div className="space-y-6">
-          <GetUsIndices />
-          <GetVixFgiScore />
-          <Card title="업종별 동향" subtitle="S&P 500 섹터 ETF 등락률" icon={ChartBarIcon}>
-            <TrendingUsSectors />
-          </Card>
-          <GetRangeVix />
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {tab === "kr" && (
+          <MotionDiv key="kr" {...TAB_ANIM} className="space-y-6">
+            <GetKospi />
+            <GetKrScore />
+            <Card title="업종별 동향" subtitle="KOSPI 업종 등락률" icon={ChartBarIcon}>
+              <TrendingSectors />
+            </Card>
+          </MotionDiv>
+        )}
+        {tab === "us" && (
+          <MotionDiv key="us" {...TAB_ANIM} className="space-y-6">
+            <GetUsIndices />
+            <GetVixFgiScore />
+            <Card title="업종별 동향" subtitle="S&P 500 섹터 ETF 등락률" icon={ChartBarIcon}>
+              <TrendingUsSectors />
+            </Card>
+            <GetRangeVix />
+          </MotionDiv>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

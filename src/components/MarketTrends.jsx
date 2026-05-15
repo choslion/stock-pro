@@ -1,4 +1,12 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+const MotionDiv = motion.div;
+const TAB_ANIM = {
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0 },
+  exit:    { opacity: 0, y: -6 },
+  transition: { duration: 0.2, ease: "easeOut" },
+};
 import Card from "./ui/Card";
 import StockRanking from "./StockRanking";
 import InvestorTrends from "./InvestorTrends";
@@ -35,11 +43,15 @@ export default function MarketTrends() {
         ))}
       </div>
 
-      {activeTab === "ranking"     && <StockRanking />}
-      {activeTab === "investor"    && <InvestorTrends />}
-      {activeTab === "etf"         && <EtfList />}
-      {activeTab === "commodities" && <Commodities />}
-      {activeTab === "forex"       && <Forex />}
+      <AnimatePresence mode="wait">
+        <MotionDiv key={activeTab} {...TAB_ANIM}>
+          {activeTab === "ranking"     && <StockRanking />}
+          {activeTab === "investor"    && <InvestorTrends />}
+          {activeTab === "etf"         && <EtfList />}
+          {activeTab === "commodities" && <Commodities />}
+          {activeTab === "forex"       && <Forex />}
+        </MotionDiv>
+      </AnimatePresence>
     </Card>
   );
 }
