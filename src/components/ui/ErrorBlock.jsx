@@ -1,8 +1,11 @@
+import { ClockIcon, XCircleIcon } from "./Icons";
+
 export default function ErrorBlock({ message, onRetry }) {
   const isTimeout = message?.includes("절전") || message?.includes("60초");
+  const Icon = isTimeout ? ClockIcon : XCircleIcon;
   return (
     <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
-      <span className="text-2xl">{isTimeout ? "⏱️" : "❌"}</span>
+      <Icon className={`w-8 h-8 ${isTimeout ? "text-yellow-500" : "text-red-500"}`} />
       <p className="text-sm text-red-400 max-w-xs leading-relaxed">{message}</p>
       {onRetry && (
         <button

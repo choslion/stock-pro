@@ -8,12 +8,13 @@ import MarketTrends from "./MarketTrends";
 import EtfList from "./EtfList";
 import Watchlist from "./Watchlist";
 import ThemeSectors from "./ThemeSectors";
+import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon } from "./ui/Icons";
 
 const NAV_TABS = [
-  { id: "market",    label: "시장",  icon: "📊", desc: "공포/탐욕 · VIX · S&P500" },
-  { id: "chart",     label: "차트",  icon: "📈", desc: "실시간 순위 · 투자자 동향" },
-  { id: "theme",     label: "테마",  icon: "🎯", desc: "분야별 동향 · ETF 순위" },
-  { id: "watchlist", label: "관심",  icon: "⭐", desc: "개발자의 관심종목" },
+  { id: "market",    label: "시장",  icon: ChartBarIcon   },
+  { id: "chart",     label: "차트",  icon: TrendingUpIcon },
+  { id: "theme",     label: "테마",  icon: GridIcon       },
+  { id: "watchlist", label: "관심",  icon: BookmarkIcon   },
 ];
 
 function SectionContent({ activeTab }) {
@@ -46,55 +47,49 @@ export default function StockIndexDashboard() {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
 
-      {/* ════════════════════════════════
-          PC (lg+): 사이드바 레이아웃
-          ════════════════════════════════ */}
+      {/* ════════ PC (lg+): 사이드바 레이아웃 ════════ */}
       <div className="hidden lg:flex min-h-screen">
 
         {/* 사이드바 */}
-        <aside className="w-56 shrink-0 sticky top-0 h-screen
-                          bg-gray-900 border-r border-gray-800
-                          flex flex-col">
+        <aside className="w-44 shrink-0 sticky top-0 h-screen
+                          bg-gray-900/80 border-r border-gray-800/60
+                          flex flex-col backdrop-blur-sm">
           {/* 로고 */}
-          <div className="px-5 py-6 border-b border-gray-800">
-            <p className="text-xl font-extrabold tracking-tight">📊 주식 현황</p>
-            <p className="text-xs text-gray-500 mt-1">실시간 시장 데이터</p>
+          <div className="px-4 py-5 border-b border-gray-800/60">
+            <div className="flex items-center gap-2">
+              <ChartBarIcon className="w-4 h-4 text-blue-400" />
+              <p className="text-sm font-bold tracking-tight text-white">stock-pro</p>
+            </div>
+            <p className="text-[11px] text-gray-600 mt-0.5 pl-6">실시간 시장 데이터</p>
           </div>
 
           {/* 네비게이션 */}
-          <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+          <nav className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5">
             {NAV_TABS.map((tab) => {
               const isActive = activeTab === tab.id;
+              const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   aria-current={isActive ? "page" : undefined}
-                  className={`w-full text-left flex items-start gap-3 px-3 py-3 rounded-xl
-                              transition-all duration-150 group
+                  className={`w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-lg
+                              transition-all duration-150
                               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400
                               ${isActive
-                                ? "bg-blue-600/20 text-white"
-                                : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
+                                ? "bg-blue-600/15 text-blue-300"
+                                : "text-gray-500 hover:bg-gray-800/50 hover:text-gray-300"}`}
                 >
-                  {/* 활성 인디케이터 */}
-                  <span className={`mt-0.5 shrink-0 w-1 h-5 rounded-full transition-all
-                                    ${isActive ? "bg-blue-400" : "bg-transparent group-hover:bg-gray-600"}`} />
-                  <span className="text-lg leading-none mt-0.5">{tab.icon}</span>
-                  <span className="flex flex-col gap-0.5">
-                    <span className={`text-sm font-semibold ${isActive ? "text-white" : ""}`}>
-                      {tab.label}
-                    </span>
-                    <span className="text-[11px] text-gray-500 leading-tight">{tab.desc}</span>
-                  </span>
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="text-sm font-medium">{tab.label}</span>
                 </button>
               );
             })}
           </nav>
 
           {/* 하단 버전 */}
-          <div className="px-5 py-4 border-t border-gray-800 text-xs text-gray-600">
-            stock-pro
+          <div className="px-4 py-3 border-t border-gray-800/60 text-[11px] text-gray-700">
+            v1.0
           </div>
         </aside>
 
@@ -106,17 +101,18 @@ export default function StockIndexDashboard() {
         </main>
       </div>
 
-      {/* ════════════════════════════════
-          모바일: 하단 탭바 레이아웃
-          ════════════════════════════════ */}
+      {/* ════════ 모바일: 하단 탭바 레이아웃 ════════ */}
       <div className="lg:hidden">
         {/* 모바일 헤더 */}
-        <header className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur-sm border-b border-gray-800 px-4 py-3">
-          <h1 className="text-lg font-bold text-center">📊 주식 상황 확인</h1>
+        <header className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur-sm border-b border-gray-800/60 px-4 py-2.5">
+          <div className="flex items-center justify-center gap-1.5">
+            <ChartBarIcon className="w-3.5 h-3.5 text-blue-400" />
+            <h1 className="text-sm font-semibold text-white tracking-tight">stock-pro</h1>
+          </div>
         </header>
 
         {/* 컨텐츠 */}
-        <main className="p-4 pb-24 space-y-6">
+        <main className="p-4 pb-20 space-y-6">
           <SectionContent activeTab={activeTab} />
         </main>
 
@@ -124,11 +120,13 @@ export default function StockIndexDashboard() {
         <nav
           aria-label="주요 섹션"
           className="fixed bottom-0 inset-x-0 z-20
-                     bg-gray-900 border-t-2 border-gray-700
-                     flex shadow-[0_-4px_20px_rgba(0,0,0,0.5)]"
+                     bg-gray-900/95 border-t border-gray-800/60
+                     flex shadow-[0_-2px_16px_rgba(0,0,0,0.4)]
+                     backdrop-blur-sm"
         >
           {NAV_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
+            const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
@@ -137,18 +135,13 @@ export default function StockIndexDashboard() {
                 className={`relative flex-1 flex flex-col items-center pt-2 pb-4 gap-1
                             transition-all duration-200
                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400
-                            ${isActive ? "text-white" : "text-gray-500 hover:text-gray-300"}`}
+                            ${isActive ? "text-blue-400" : "text-gray-600 hover:text-gray-400"}`}
               >
                 {isActive && (
-                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-0.5 rounded-b-full bg-blue-400" />
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-b-full bg-blue-400" />
                 )}
-                <span className={`flex items-center justify-center w-10 h-7 rounded-xl text-lg
-                                  transition-all duration-200
-                                  ${isActive ? "bg-blue-500/20 scale-110" : ""}`}>
-                  {tab.icon}
-                </span>
-                <span className={`text-[11px] font-semibold tracking-wide transition-colors
-                                  ${isActive ? "text-blue-300" : "text-gray-500"}`}>
+                <Icon className="w-5 h-5" />
+                <span className={`text-[10px] font-medium ${isActive ? "text-blue-400" : "text-gray-600"}`}>
                   {tab.label}
                 </span>
               </button>

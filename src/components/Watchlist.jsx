@@ -5,6 +5,7 @@ import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
 import { WATCHLIST } from "../config/watchlist";
+import { BookmarkIcon } from "./ui/Icons";
 
 const KR_LIST = WATCHLIST.filter((w) => w.market === "KR");
 const KR_TICKERS = KR_LIST.map((w) => w.ticker);
@@ -78,7 +79,7 @@ export default function Watchlist() {
   }
 
   return (
-    <Card title="⭐ 개발자의 관심종목" subtitle="응원해줘 친구들">
+    <Card title="개발자의 관심종목" subtitle="응원해줘 친구들" icon={BookmarkIcon}>
       {/* 헤더 — 2줄 구조 */}
       <div className="mb-2 space-y-1 min-h-[40px]">
         {/* 1줄: 좌측 여백 + 원/달러 토글 (우) */}

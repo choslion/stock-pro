@@ -4,6 +4,7 @@ import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
+import { TrendingUpIcon } from "./ui/Icons";
 
 const formatDate = (dateStr) =>
   new Date(dateStr).toLocaleDateString("ko-KR", {
@@ -32,7 +33,7 @@ export default function GetSp500() {
   const deviationColor = isPositive ? "text-green-400" : "text-red-400";
 
   return (
-    <Card title="📈 미국 증시 현황" subtitle="S&P 500 지수">
+    <Card title="미국 증시 현황" subtitle="S&P 500 지수" icon={TrendingUpIcon}>
       <div className="min-h-[200px] flex flex-col justify-center">
         {error ? (
           <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />

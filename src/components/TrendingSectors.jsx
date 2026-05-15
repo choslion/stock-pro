@@ -3,22 +3,7 @@ import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
-
-const EMOJI_MAP = {
-  "운수장비": "🚗", "음식료품": "🍱", "섬유의복": "👕", "화학": "⚗️",
-  "금융업": "🏦", "건설업": "🏗️", "전기전자": "💻", "철강금속": "⚙️",
-  "기계": "🔧", "의약품": "💊", "서비스업": "🏢", "유통업": "🛒",
-  "통신업": "📱", "보험": "🛡️", "증권": "📈", "은행": "🏦",
-  "비금속광물": "🪨", "종이목재": "📄", "전기가스업": "⚡", "운수창고": "📦",
-  "의료정밀": "🔬", "농업": "🌾", "수산업": "🐟", "광업": "⛏️",
-};
-
-function getEmoji(name) {
-  for (const [key, emoji] of Object.entries(EMOJI_MAP)) {
-    if (name.includes(key)) return emoji;
-  }
-  return "📊";
-}
+import { ChartBarIcon } from "./ui/Icons";
 
 function now() {
   return new Date().toLocaleString("ko-KR", {
@@ -37,7 +22,7 @@ export default function TrendingSectors() {
     setError("");
     axiosInstance
       .get("/sectors")
-      .then((res) => setData(res.data))
+      .then((res) => setData(res.data.items ?? res.data ?? []))
       .catch((err) => setError(parseError(err)))
       .finally(() => setLoading(false));
   }, [retryCount]);
@@ -61,13 +46,13 @@ export default function TrendingSectors() {
               return (
                 <div
                   key={sector.name}
-                  className="flex items-center gap-4 py-3 px-1 hover:bg-gray-700/20 transition-colors"
+                  className="flex items-center gap-3 py-3 px-1 hover:bg-gray-700/20 transition-colors"
                 >
                   <span className="text-blue-400 font-bold text-sm w-5 shrink-0 text-center">
                     {i + 1}
                   </span>
-                  <span className="text-xl w-7 shrink-0 text-center">
-                    {getEmoji(sector.name)}
+                  <span className="w-5 shrink-0 flex justify-center">
+                    <ChartBarIcon className="w-3.5 h-3.5 text-gray-600" />
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{sector.name}</p>

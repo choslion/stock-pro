@@ -5,6 +5,7 @@ import Spin from "./ui/Spin";
 import SummaryBanner from "./ui/SummaryBanner";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
+import { ActivityIcon } from "./ui/Icons";
 
 const formatDate = (isoDateStr) =>
   new Date(isoDateStr).toLocaleDateString("ko-KR", {
@@ -19,11 +20,11 @@ const LABEL_MAP = {
   "extreme greed":{ ko: "극단적 탐욕", color: "text-green-300" },
 };
 const BANNER_MAP = {
-  "extreme fear":  { text: "🟢 지금은 매수 기회입니다 — 시장이 과도하게 하락한 상태", type: "safe" },
-  "fear":          { text: "🟡 분할 매수를 고려해 보세요",                           type: "caution" },
-  "neutral":       { text: "⚪ 시장은 중립 상태입니다 — 관망을 추천합니다",           type: "neutral" },
-  "greed":         { text: "🟠 수익 실현을 고려해 보세요 — 가격이 많이 오른 상태",    type: "warning" },
-  "extreme greed": { text: "🔴 지금은 팔 때입니다 — 시장이 과열되어 있습니다",        type: "danger" },
+  "extreme fear":  { text: "지금은 매수 기회입니다 — 시장이 과도하게 하락한 상태", type: "safe" },
+  "fear":          { text: "분할 매수를 고려해 보세요",                           type: "caution" },
+  "neutral":       { text: "시장은 중립 상태입니다 — 관망을 추천합니다",           type: "neutral" },
+  "greed":         { text: "수익 실현을 고려해 보세요 — 가격이 많이 오른 상태",    type: "warning" },
+  "extreme greed": { text: "지금은 팔 때입니다 — 시장이 과열되어 있습니다",        type: "danger" },
 };
 
 export default function GetFgi() {
@@ -47,10 +48,10 @@ export default function GetFgi() {
 
   const desc = data?.description?.toLowerCase() ?? "";
   const label = LABEL_MAP[desc] ?? { ko: data?.description ?? "", color: "text-yellow-300" };
-  const banner = BANNER_MAP[desc] ?? { text: "⚪ 관망을 추천합니다", type: "neutral" };
+  const banner = BANNER_MAP[desc] ?? { text: "관망을 추천합니다", type: "neutral" };
 
   return (
-    <Card title="😰 시장 심리 지수" subtitle="CNN Fear & Greed Index">
+    <Card title="시장 심리 지수" subtitle="CNN Fear & Greed Index" icon={ActivityIcon}>
       <div className="min-h-[220px] flex flex-col justify-center">
         {error ? (
           <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />

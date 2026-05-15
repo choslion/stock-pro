@@ -6,8 +6,9 @@ import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
 import ScrollTabs from "./ui/ScrollTabs";
 import { THEMES } from "../config/themes";
+import { GridIcon } from "./ui/Icons";
 
-const THEME_TABS = THEMES.map((t) => ({ id: t.id, label: `${t.emoji} ${t.label}` }));
+const THEME_TABS = THEMES.map((t) => ({ id: t.id, label: t.label }));
 
 function ChangeRate({ value }) {
   const color = value === 0 ? "text-gray-400" : value > 0 ? "text-red-400" : "text-blue-400";
@@ -104,7 +105,7 @@ export default function ThemeSectors() {
   const isLoading = krLoading || usLoading;
 
   return (
-    <Card title="🎯 분야별 동향" subtitle="테마별 주요 종목 현황">
+    <Card title="분야별 동향" subtitle="테마별 주요 종목 현황" icon={GridIcon}>
       {/* 테마 탭 */}
       <div className="mb-4">
         <ScrollTabs tabs={THEME_TABS} activeId={themeId} onChange={setThemeId} ariaLabel="테마 선택" />
@@ -161,7 +162,7 @@ export default function ThemeSectors() {
         {/* 국내 섹션 */}
         {theme.kr_stocks.length > 0 && (
           <>
-            <SectionHeader>🇰🇷 국내</SectionHeader>
+            <SectionHeader><span className="inline-flex items-center gap-1.5"><span className="bg-blue-900/60 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded">KR</span>국내</span></SectionHeader>
             {krLoading ? (
               <div className="flex justify-center py-4"><Spin /></div>
             ) : krError ? (
@@ -194,7 +195,7 @@ export default function ThemeSectors() {
         {/* 해외 섹션 */}
         {theme.us_candidates.length > 0 && (
           <>
-            <SectionHeader>🇺🇸 해외 — 자동 선별 상위 10 (시가총액·매출성장·거래량·변동성·R&D)</SectionHeader>
+            <SectionHeader><span className="inline-flex items-center gap-1.5"><span className="bg-yellow-900/60 text-yellow-300 text-[10px] font-bold px-1.5 py-0.5 rounded">US</span>해외 — 자동 선별 상위 10 (시가총액·매출성장·거래량·변동성·R&D)</span></SectionHeader>
             {usLoading ? (
               <div className="flex justify-center py-6"><Spin /></div>
             ) : usError ? (
