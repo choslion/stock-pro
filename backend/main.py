@@ -1249,3 +1249,114 @@ def get_kr_theme_stocks(keyword: str = Query(...)):
         return result
 
     return _get_cached(cache_key, fetch)
+
+
+# ── AI 시황 브리핑 ────────────────────────────────────────────────────────────
+
+def _build_market_snapshot() -> str:
+    """캐시된 시장 데이터를 모아 프롬프트용 텍스트로 변환."""
+    lines: list[str] = []
+
+    # 미국 지수
+    us = (_cache.get("us_indices") or {}).get("data") or {}
+    if us:
+        lines.append("## 미국 주요 지수")
+        for key in ["sp500", "nasdaq", "dow"]:
+            d = us.get(key)
+            if d:
+                sign = "+" if d["change_pct"] >= 0 else ""
+                lines.append(f"- {d['label']}: {d['value']:,.2f} ({sign}{d['change_pct']:.2f}%)")
+
+    # 국내 지수
+    kr = (_cache.get("kospi") or {}).get("data") or {}
+    if kr:
+        lines.append("## 국내 주요 지수")
+        for key, label in [("kospi", "KOSPI"), ("kosdaq", "KOSDAQ")]:
+            d = kr.get(key)
+            if d:
+                sign = "+" if d["change_pct"] >= 0 else ""
+                lines.append(f"- {label}: {d['value']:,.2f} ({sign}{d['change_pct']:.2f}%)")
+
+    # VIX
+    vix_entry = _cache.get("vix")
+    if vix_entry and vix_entry.get("data"):
+        v = vix_entry["data"]
+        val = v.get("value") if isinstance(v, dict) else None
+        if val:
+            lines.append(f"## 공포지수(VIX)\n- VIX: {val:.2f}")
+
+    # 원자재 (상위 5개)
+    cmd_entry = _cache.get("commodities")
+    if cmd_entry and cmd_entry.get("data"):
+        items = cmd_entry["data"][:5]
+        lines.append("## 주요 원자재")
+        for it in items:
+            sign = "+" if it["change_pct"] >= 0 else ""
+            lines.append(f"- {it['name']}: ${it['value']:,.2f} ({sign}{it['change_pct']:.2f}%)")
+
+    # 환율 (달러, 엔, 유로)
+    fx_entry = _cache.get("forex")
+    if fx_entry and fx_entry.get("data"):
+        fx_map = {it["pair"]: it for it in fx_entry["data"]}
+        lines.append("## 주요 환율")
+        for pair, label in [("USD/KRW", "달러"), ("EUR/KRW", "유로"), ("JPY/KRW", "엔(100)")]:
+            it = fx_map.get(pair)
+            if it:
+                sign = "+" if it["change_pct"] >= 0 else ""
+                lines.append(f"- {label}: {it['value']:,.2f}원 ({sign}{it['change_pct']:.2f}%)")
+
+    # 미국 섹터 ETF 상위/하위
+    sec_entry = _cache.get("us_sectors")
+    if sec_entry and sec_entry.get("data"):
+        secs = sorted(sec_entry["data"], key=lambda x: x.get("change_pct", 0), reverse=True)
+        lines.append("## 미국 섹터 동향")
+        for s in secs[:3]:
+            sign = "+" if s["change_pct"] >= 0 else ""
+            lines.append(f"- {s['name']} 강세: {sign}{s['change_pct']:.2f}%")
+        for s in secs[-2:]:
+            sign = "+" if s["change_pct"] >= 0 else ""
+            lines.append(f"- {s['name']} 약세: {sign}{s['change_pct']:.2f}%")
+
+    return "\n".join(lines) if lines else "현재 시장 데이터를 불러오는 중입니다."
+
+
+@app.get("/ai-briefing")
+def get_ai_briefing():
+    import anthropic as _anthropic
+
+    cache_key = "ai_briefing"
+    now = time.time()
+    entry = _cache.get(cache_key)
+    if entry and now - entry["ts"] < 3600:
+        return entry["data"]
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "ANTHROPIC_API_KEY가 설정되지 않았습니다.")
+
+    snapshot = _build_market_snapshot()
+    today = datetime.utcnow().strftime("%Y년 %m월 %d일")
+
+    prompt = f"""당신은 전문 주식 시황 분석가입니다. 아래 {today} 기준 시장 데이터를 바탕으로 한국 투자자를 위한 시황 브리핑을 작성하세요.
+
+{snapshot}
+
+작성 규칙:
+- 200~250자 내외의 간결한 한국어 문단 1개
+- 수치를 근거로 시장 흐름의 핵심 포인트 2~3개 언급
+- 투자 권유는 금지, 사실 기반 서술만
+- 딱딱하지 않고 읽기 쉬운 어조
+- 마지막에 "※ AI가 시장 데이터를 분석하여 자동 생성된 브리핑입니다." 문구 추가"""
+
+    client = _anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=512,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = message.content[0].text.strip()
+
+    fetched_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    result = {"briefing": text, "fetched_at": fetched_at}
+    _cache[cache_key] = {"data": result, "ts": now}
+    return result

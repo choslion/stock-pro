@@ -6,6 +6,7 @@ import TrendingUsSectors from "./TrendingUsSectors";
 import GetKospi from "./GetKospi";
 import GetKrScore from "./GetKrScore";
 import TrendingSectors from "./TrendingSectors";
+import AiBriefing from "./AiBriefing";
 import Card from "./ui/Card";
 import { ChartBarIcon } from "./ui/Icons";
 
@@ -19,6 +20,7 @@ export default function MarketDashboard() {
 
   return (
     <div>
+      <AiBriefing />
       <div className="flex gap-1 mb-6 border-b border-gray-700">
         {TABS.map((t) => (
           <button
