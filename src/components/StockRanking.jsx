@@ -81,9 +81,9 @@ export default function StockRanking() {
 
   return (
     <div>
-      {/* 국내/해외 — 탭 스타일 */}
-      <div className="flex items-center justify-between border-b border-gray-700 mb-3">
-        <div className="flex gap-1">
+      {/* 국내/해외 + 원/달러 토글 */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5">
           {MARKETS.map((m) => (
             <button
               key={m.id}
@@ -92,10 +92,10 @@ export default function StockRanking() {
                 setFilter("amount");
                 setCurrency("krw");
               }}
-              className={`px-4 py-2 text-sm font-semibold transition-colors ${
+              className={`px-4 py-1 rounded-full text-sm font-medium transition-colors ${
                 market === m.id
-                  ? "text-white border-b-2 border-blue-400"
-                  : "text-gray-500 hover:text-gray-300"
+                  ? "bg-blue-500 text-white"
+                  : "text-gray-400 hover:text-gray-200"
               }`}
             >
               {m.label}
@@ -103,14 +103,13 @@ export default function StockRanking() {
           ))}
         </div>
 
-        {/* 원/달러 토글 — 해외일 때만 표시 */}
         {isOverseas && (
-          <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5 mb-1">
+          <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5">
             {["krw", "usd"].map((c) => (
               <button
                 key={c}
                 onClick={() => setCurrency(c)}
-                className={`px-3 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   currency === c
                     ? "bg-blue-500 text-white"
                     : "text-gray-400 hover:text-gray-200"
