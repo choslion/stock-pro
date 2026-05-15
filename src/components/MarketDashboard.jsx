@@ -1,10 +1,7 @@
 import { useState } from "react";
 import GetUsIndices from "./GetUsIndices";
 import GetVixFgiScore from "./GetVixFgiScore";
-import GetFgi from "./GetFgi";
-import Vix from "./Vix";
 import GetRangeVix from "./GetRangeVix";
-import GetSp500 from "./GetSp500";
 import GetKospi from "./GetKospi";
 import GetKrScore from "./GetKrScore";
 import TrendingSectors from "./TrendingSectors";
@@ -51,10 +48,7 @@ export default function MarketDashboard() {
         <div className="space-y-6">
           <GetUsIndices />
           <GetVixFgiScore />
-          <GetFgi />
-          <Vix />
           <GetRangeVix />
-          <GetSp500 />
         </div>
       )}
     </div>
