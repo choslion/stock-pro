@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { createChart } from "lightweight-charts";
+import { createChart, LineSeries } from "lightweight-charts";
 import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
 
@@ -61,7 +61,7 @@ export default function StockChartModal({ stock, onBack, onClose }) {
       handleScale:  true,
     });
 
-    const series = chart.addLineSeries({
+    const series = chart.addSeries(LineSeries, {
       color:     lineColor,
       lineWidth: 2,
       priceLineVisible: false,
