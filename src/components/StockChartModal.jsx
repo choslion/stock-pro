@@ -52,6 +52,7 @@ export default function StockChartModal({ stock, onBack, onClose }) {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
+      autoSize:    true,
       layout:      { background: { color: "transparent" }, textColor: "#9ca3af" },
       grid:        { vertLines: { color: "#1f2937" }, horzLines: { color: "#1f2937" } },
       crosshair:   { mode: 1 },
@@ -71,17 +72,7 @@ export default function StockChartModal({ stock, onBack, onClose }) {
     chartRef.current  = chart;
     seriesRef.current = series;
 
-    const ro = new ResizeObserver(() => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
-      }
-    });
-    ro.observe(containerRef.current);
-
-    return () => {
-      ro.disconnect();
-      chart.remove();
-    };
+    return () => { chart.remove(); };
   }, [lineColor]);
 
   /* ── 데이터 로드 ── */
@@ -159,7 +150,7 @@ export default function StockChartModal({ stock, onBack, onClose }) {
 
         {/* 차트 영역 */}
         <div className="px-2 pt-3 pb-1 relative" style={{ height: 260 }}>
-          <div ref={containerRef} className="w-full h-full" />
+          <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900/70">
               <Spin />
