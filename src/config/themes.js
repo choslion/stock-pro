@@ -128,8 +128,9 @@ export const THEMES = [
     label: "양자컴퓨터",
     emoji: "⚛️",
     kr_stocks: [
-      { ticker: "215050", name: "우리로" },    // 코드 확인 필요
       { ticker: "017670", name: "SK텔레콤" },
+      { ticker: "030200", name: "KT" },
+      { ticker: "000660", name: "SK하이닉스" },
     ],
     us_candidates: [
       { ticker: "IONQ",  name: "IonQ" },
@@ -174,8 +175,13 @@ export const THEMES = [
     id: "space",
     label: "우주",
     emoji: "🚀",
-    naver_keyword: "우주항공",
-    kr_stocks: [],
+    kr_stocks: [
+      { ticker: "012450", name: "한화에어로스페이스" },
+      { ticker: "047810", name: "한국항공우주" },
+      { ticker: "079550", name: "LIG넥스원" },
+      { ticker: "272210", name: "한화시스템" },
+      { ticker: "005010", name: "휴니드" },
+    ],
     us_candidates: [
       { ticker: "RKLB",  name: "로켓랩" },
       { ticker: "ASTS",  name: "AST스페이스모바일" },
@@ -195,8 +201,13 @@ export const THEMES = [
     id: "robot",
     label: "로봇",
     emoji: "🦾",
-    naver_keyword: "로봇",
-    kr_stocks: [],
+    kr_stocks: [
+      { ticker: "277810", name: "레인보우로보틱스" },
+      { ticker: "090360", name: "로보스타" },
+      { ticker: "056080", name: "유진로봇" },
+      { ticker: "060280", name: "큐렉소" },
+      { ticker: "215100", name: "뉴로메카" },
+    ],
     us_candidates: [
       { ticker: "ISRG",  name: "인튜이티브서지컬" },
       { ticker: "TER",   name: "테라다인" },
@@ -215,8 +226,14 @@ export const THEMES = [
     id: "bio",
     label: "바이오",
     emoji: "🧬",
-    naver_keyword: "바이오",
-    kr_stocks: [],
+    kr_stocks: [
+      { ticker: "207940", name: "삼성바이오로직스" },
+      { ticker: "068270", name: "셀트리온" },
+      { ticker: "128940", name: "한미약품" },
+      { ticker: "000100", name: "유한양행" },
+      { ticker: "326030", name: "SK바이오팜" },
+      { ticker: "006280", name: "녹십자" },
+    ],
     us_candidates: [
       { ticker: "LLY",   name: "일라이릴리" },
       { ticker: "AMGN",  name: "암젠" },

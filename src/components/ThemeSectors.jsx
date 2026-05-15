@@ -30,7 +30,6 @@ function SectionHeader({ children }) {
 export default function ThemeSectors() {
   const [themeId, setThemeId]     = useState(THEMES[0].id);
   const [krMap, setKrMap]               = useState({});
-  const [naverKrStocks, setNaverKrStocks] = useState([]);
   const [usStocks, setUsStocks]         = useState([]);
   const [usdKrw, setUsdKrw]             = useState(null);
   const [currency, setCurrency]         = useState("krw");
@@ -45,21 +44,13 @@ export default function ThemeSectors() {
 
   useEffect(() => {
     setKrMap({});
-    setNaverKrStocks([]);
     setUsStocks([]);
     setKrError("");
     setUsError("");
     setFetchedAt(null);
 
-    // 국내 — 네이버 테마 동적 스크래핑 or 고정 watchlist
-    if (theme.naver_keyword) {
-      setKrLoading(true);
-      axiosInstance
-        .get("/kr-theme-stocks", { params: { keyword: theme.naver_keyword } })
-        .then((res) => setNaverKrStocks(res.data.items ?? []))
-        .catch((err) => setKrError(parseError(err)))
-        .finally(() => setKrLoading(false));
-    } else if (theme.kr_stocks.length > 0) {
+    // 국내 — 고정 watchlist
+    if (theme.kr_stocks.length > 0) {
       setKrLoading(true);
       axiosInstance
         .get("/watchlist", { params: { kr: theme.kr_stocks.map((s) => s.ticker).join(",") } })
@@ -169,36 +160,18 @@ export default function ThemeSectors() {
 
       <div className="min-h-[420px]">
         {/* 국내 섹션 */}
-        {(theme.naver_keyword || theme.kr_stocks.length > 0) && (
+        {theme.kr_stocks.length > 0 && (
           <>
             <SectionHeader>
               <span className="inline-flex items-center gap-1.5">
                 <span className="bg-blue-900/60 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded">KR</span>
-                {theme.naver_keyword ? "국내 — 네이버 금융 테마 실시간" : "국내"}
+                국내
               </span>
             </SectionHeader>
             {krLoading ? (
               <div className="flex justify-center py-4"><Spin /></div>
             ) : krError ? (
               <ErrorBlock message={krError} onRetry={() => setRetryCount((c) => c + 1)} />
-            ) : theme.naver_keyword ? (
-              <div className="divide-y divide-gray-700/50">
-                {naverKrStocks.map((stock) => (
-                  <div
-                    key={stock.ticker}
-                    className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
-                  >
-                    <span className="col-span-2 text-xs font-semibold text-blue-400">KR</span>
-                    <span className="col-span-4 text-sm font-medium truncate pr-2">{stock.name}</span>
-                    <span className="col-span-3 text-right text-sm text-gray-300">
-                      {stock.price.toLocaleString("ko-KR")}원
-                    </span>
-                    <span className="col-span-3 text-right text-sm">
-                      <ChangeRate value={stock.change_rate} />
-                    </span>
-                  </div>
-                ))}
-              </div>
             ) : (
               <div className="divide-y divide-gray-700/50">
                 {theme.kr_stocks.map((config) => {
