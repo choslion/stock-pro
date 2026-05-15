@@ -149,11 +149,19 @@ def get_kr_score():
 def get_commodities():
     def fetch():
         ITEMS = [
-            ("CL=F",  "WTI 원유",  "$/배럴"),
-            ("GC=F",  "금",        "$/온스"),
-            ("SI=F",  "은",        "$/온스"),
-            ("HG=F",  "구리",      "$/파운드"),
-            ("NG=F",  "천연가스",  "$/MMBtu"),
+            ("CL=F",  "WTI 원유",   "$/배럴"),
+            ("BZ=F",  "브렌트유",   "$/배럴"),
+            ("GC=F",  "금",         "$/온스"),
+            ("SI=F",  "은",         "$/온스"),
+            ("PL=F",  "백금",       "$/온스"),
+            ("PA=F",  "팔라듐",     "$/온스"),
+            ("HG=F",  "구리",       "$/파운드"),
+            ("NG=F",  "천연가스",   "$/MMBtu"),
+            ("ZW=F",  "밀",         "¢/부셸"),
+            ("ZC=F",  "옥수수",     "¢/부셸"),
+            ("ZS=F",  "대두",       "¢/부셸"),
+            ("CC=F",  "코코아",     "$/톤"),
+            ("KC=F",  "커피",       "¢/파운드"),
         ]
         result = []
         for ticker, name, unit in ITEMS:
@@ -182,10 +190,16 @@ def get_commodities():
 def get_forex():
     def fetch():
         PAIRS = [
-            ("USDKRW=X", "달러",      "USD/KRW", 1),
-            ("EURKRW=X", "유로",      "EUR/KRW", 1),
-            ("JPYKRW=X", "엔 (100엔)", "JPY/KRW", 100),
-            ("CNYKRW=X", "위안",      "CNY/KRW", 1),
+            ("USDKRW=X", "달러",        "USD/KRW",  1),
+            ("EURKRW=X", "유로",        "EUR/KRW",  1),
+            ("GBPKRW=X", "파운드",      "GBP/KRW",  1),
+            ("JPYKRW=X", "엔 (100엔)",  "JPY/KRW",  100),
+            ("CNYKRW=X", "위안",        "CNY/KRW",  1),
+            ("HKDKRW=X", "홍콩달러",   "HKD/KRW",  1),
+            ("AUDKRW=X", "호주달러",   "AUD/KRW",  1),
+            ("CADKRW=X", "캐나다달러", "CAD/KRW",  1),
+            ("CHFKRW=X", "스위스프랑", "CHF/KRW",  1),
+            ("SGDKRW=X", "싱가포르달러", "SGD/KRW", 1),
         ]
         result = []
         for ticker, label, pair, mul in PAIRS:
