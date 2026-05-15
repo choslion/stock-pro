@@ -1,19 +1,25 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 
-/**
- * 접근성을 갖춘 탭 목록.
- * - 모바일: 가로 스크롤 (스크롤바 숨김, 우측 페이드 힌트)
- * - sm(640px)+: flex-wrap으로 자연스럽게 줄바꿈
- * - 키보드: ←→ Home End 로 탭 이동, Enter/Space 로 선택
- *
- * props:
- *   tabs      - [{ id, label }]
- *   activeId  - 현재 활성 탭 id
- *   onChange  - (id) => void
- *   ariaLabel - 탭 목록 레이블 (스크린리더용)
- */
 export default function ScrollTabs({ tabs, activeId, onChange, ariaLabel }) {
   const listRef = useRef(null);
+  const [showLeftFade, setShowLeftFade]   = useState(false);
+  const [showRightFade, setShowRightFade] = useState(false);
+
+  const updateFades = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    setShowLeftFade(el.scrollLeft > 1);
+    setShowRightFade(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    updateFades();
+    const el = listRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(updateFades);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [updateFades, tabs]);
 
   const focusTab = useCallback((idx) => {
     const btns = listRef.current?.querySelectorAll('[role="tab"]');
@@ -46,6 +52,7 @@ export default function ScrollTabs({ tabs, activeId, onChange, ariaLabel }) {
         ref={listRef}
         role="tablist"
         aria-label={ariaLabel}
+        onScroll={updateFades}
         className="flex gap-2 overflow-x-auto sm:flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((tab, idx) => (
@@ -70,11 +77,19 @@ export default function ScrollTabs({ tabs, activeId, onChange, ariaLabel }) {
         ))}
       </div>
 
-      {/* 모바일 전용: 더 탭이 있다는 우측 페이드 힌트 */}
+      {/* 좌측 페이드 — 스크롤이 시작점에서 벗어났을 때만 */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute right-0 top-0 h-full w-8
-                   bg-gradient-to-l from-gray-800 to-transparent sm:hidden"
+        className={`pointer-events-none absolute left-0 top-0 h-full w-8
+                    bg-gradient-to-r from-gray-800 to-transparent sm:hidden
+                    transition-opacity duration-200 ${showLeftFade ? "opacity-100" : "opacity-0"}`}
+      />
+      {/* 우측 페이드 — 스크롤이 끝에 도달하면 사라짐 */}
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute right-0 top-0 h-full w-8
+                    bg-gradient-to-l from-gray-800 to-transparent sm:hidden
+                    transition-opacity duration-200 ${showRightFade ? "opacity-100" : "opacity-0"}`}
       />
     </div>
   );

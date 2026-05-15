@@ -37,7 +37,7 @@ export default function TrendingUsSectors() {
         <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
       ) : (
         <>
-          <p className="text-xs text-gray-500 mb-3">S&amp;P 500 섹터 ETF · {now()} 기준</p>
+          <p className="text-xs text-gray-500 mb-3">{now()} 기준</p>
           <div className="divide-y divide-gray-700/50">
             {data.map((sector, i) => {
               const isPositive = sector.change_rate > 0;
