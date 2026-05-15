@@ -145,6 +145,70 @@ def get_kr_score():
     return _get_cached("kr_score", fetch)
 
 
+@app.get("/commodities")
+def get_commodities():
+    def fetch():
+        ITEMS = [
+            ("CL=F",  "WTI 원유",  "$/배럴"),
+            ("GC=F",  "금",        "$/온스"),
+            ("SI=F",  "은",        "$/온스"),
+            ("HG=F",  "구리",      "$/파운드"),
+            ("NG=F",  "천연가스",  "$/MMBtu"),
+        ]
+        result = []
+        for ticker, name, unit in ITEMS:
+            try:
+                hist = yf.Ticker(ticker).history(period="5d")
+                if hist.empty or len(hist) < 2:
+                    continue
+                current = float(hist["Close"].iloc[-1])
+                prev    = float(hist["Close"].iloc[-2])
+                change  = current - prev
+                result.append({
+                    "name":       name,
+                    "ticker":     ticker,
+                    "unit":       unit,
+                    "value":      round(current, 2),
+                    "change":     round(change, 2),
+                    "change_pct": round(change / prev * 100, 2),
+                })
+            except Exception:
+                pass
+        return result
+    return _get_cached("commodities", fetch)
+
+
+@app.get("/forex")
+def get_forex():
+    def fetch():
+        PAIRS = [
+            ("USDKRW=X", "달러",      "USD/KRW", 1),
+            ("EURKRW=X", "유로",      "EUR/KRW", 1),
+            ("JPYKRW=X", "엔 (100엔)", "JPY/KRW", 100),
+            ("CNYKRW=X", "위안",      "CNY/KRW", 1),
+        ]
+        result = []
+        for ticker, label, pair, mul in PAIRS:
+            try:
+                hist = yf.Ticker(ticker).history(period="5d")
+                if hist.empty or len(hist) < 2:
+                    continue
+                current = float(hist["Close"].iloc[-1]) * mul
+                prev    = float(hist["Close"].iloc[-2]) * mul
+                change  = current - prev
+                result.append({
+                    "pair":       pair,
+                    "label":      label,
+                    "value":      round(current, 2),
+                    "change":     round(change, 2),
+                    "change_pct": round(change / prev * 100, 2),
+                })
+            except Exception:
+                pass
+        return result
+    return _get_cached("forex", fetch)
+
+
 @app.get("/us-sectors")
 def get_us_sectors():
     def fetch():
