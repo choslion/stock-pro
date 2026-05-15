@@ -115,7 +115,8 @@ export default function SearchModal({ onClose }) {
   }, [onClose]);
 
   return (
-    /* 딤 오버레이 — aria-hidden 없이 role=dialog 로 스크린리더 격리 */
+    <>
+    {/* 딤 오버레이 — aria-hidden 없이 role=dialog 로 스크린리더 격리 */}
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-14 px-4"
       onClick={handleOverlayClick}
@@ -195,5 +196,6 @@ export default function SearchModal({ onClose }) {
         onClose={onClose}
       />
     )}
+    </>
   );
 }
