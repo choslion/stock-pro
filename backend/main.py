@@ -145,6 +145,38 @@ def get_kr_score():
     return _get_cached("kr_score", fetch)
 
 
+@app.get("/us-sectors")
+def get_us_sectors():
+    def fetch():
+        SECTORS = [
+            ("XLK",  "정보기술"),
+            ("XLF",  "금융"),
+            ("XLV",  "헬스케어"),
+            ("XLY",  "임의소비재"),
+            ("XLC",  "커뮤니케이션"),
+            ("XLI",  "산업재"),
+            ("XLP",  "필수소비재"),
+            ("XLE",  "에너지"),
+            ("XLB",  "소재"),
+            ("XLRE", "부동산"),
+            ("XLU",  "유틸리티"),
+        ]
+        result = []
+        for ticker, name in SECTORS:
+            try:
+                hist = yf.Ticker(ticker).history(period="5d")
+                if hist.empty or len(hist) < 2:
+                    continue
+                current = float(hist["Close"].iloc[-1])
+                prev    = float(hist["Close"].iloc[-2])
+                change_rate = round((current - prev) / prev * 100, 2)
+                result.append({"name": name, "ticker": ticker, "change_rate": change_rate})
+            except Exception:
+                pass
+        return sorted(result, key=lambda x: x["change_rate"], reverse=True)
+    return _get_cached("us_sectors", fetch)
+
+
 @app.get("/us-indices")
 def get_us_indices():
     def fetch():

@@ -2,6 +2,7 @@ import { useState } from "react";
 import GetUsIndices from "./GetUsIndices";
 import GetVixFgiScore from "./GetVixFgiScore";
 import GetRangeVix from "./GetRangeVix";
+import TrendingUsSectors from "./TrendingUsSectors";
 import GetKospi from "./GetKospi";
 import GetKrScore from "./GetKrScore";
 import TrendingSectors from "./TrendingSectors";
@@ -48,6 +49,9 @@ export default function MarketDashboard() {
         <div className="space-y-6">
           <GetUsIndices />
           <GetVixFgiScore />
+          <Card title="업종별 동향" subtitle="S&P 500 섹터 ETF 등락률" icon={ChartBarIcon}>
+            <TrendingUsSectors />
+          </Card>
           <GetRangeVix />
         </div>
       )}
