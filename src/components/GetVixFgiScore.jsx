@@ -29,13 +29,6 @@ const FGI_LABEL = {
   "extreme greed": { ko: "극단적 탐욕", color: "text-red-400"    },
 };
 
-function getVixLabel(value) {
-  if (value < 15) return { ko: "안정",       color: "text-green-400"  };
-  if (value < 25) return { ko: "보통 변동성", color: "text-yellow-300" };
-  if (value < 35) return { ko: "높은 변동성", color: "text-orange-300" };
-  return               { ko: "극단적 위험", color: "text-red-400"    };
-}
-
 function getScoreMeta(score) {
   if (score <= 20) return { label: "극단적 공포", advice: "강력한 매수 기회",             explanation: "시장이 과도하게 빠져있을 가능성 높음" };
   if (score <= 40) return { label: "공포",        advice: "관망 또는 분할 매수",           explanation: "하락 가능성 있지만 일부 진입 고려"   };
@@ -44,15 +37,17 @@ function getScoreMeta(score) {
   return                  { label: "극단적 탐욕", advice: "분할 매도 또는 전량 매도 고려", explanation: "시장 과열, 거품 주의 필요"           };
 }
 
+const SUBTITLE = "FGI · RSI · MA200 · HYG 기반 종합 점수";
+
 export default function GetVixFgiScore() {
-  const [error, setError]           = useState("");
-  const [loading, setLoading]       = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
+  const [error, setError]               = useState("");
+  const [loading, setLoading]           = useState(true);
+  const [retryCount, setRetryCount]     = useState(0);
   const [displayScore, setDisplayScore] = useState("0.0");
-  const [score, setScore]           = useState(0);
-  const [meta, setMeta]             = useState(null);
-  const [fgi, setFgi]               = useState(null);
-  const [vix, setVix]               = useState(null);
+  const [score, setScore]               = useState(0);
+  const [meta, setMeta]                 = useState(null);
+  const [fgi, setFgi]                   = useState(null);
+  const [detail, setDetail]             = useState(null);
 
   const scoreMotion = useMotionValue(0);
   const smoothScore = useSpring(scoreMotion, { stiffness: 70, damping: 20 });
@@ -64,15 +59,14 @@ export default function GetVixFgiScore() {
     Promise.all([
       axiosInstance.get("/score"),
       axiosInstance.get("/fgi"),
-      axiosInstance.get("/vix"),
     ])
-      .then(([scoreRes, fgiRes, vixRes]) => {
+      .then(([scoreRes, fgiRes]) => {
         const target = scoreRes?.data?.score || 0;
         animate(scoreMotion, target, { duration: 1, ease: [0.22, 1, 0.36, 1] });
         setScore(target);
         setMeta(getScoreMeta(target));
+        setDetail(scoreRes.data);
         setFgi(fgiRes.data);
-        setVix(vixRes.data);
         setLoading(false);
       })
       .catch((err) => {
@@ -88,7 +82,7 @@ export default function GetVixFgiScore() {
 
   if (loading) {
     return (
-      <Card title="지금 투자 타이밍인가요?" subtitle="VIX + FGI 기반 종합 점수" icon={BoltIcon}>
+      <Card title="지금 투자 타이밍인가요?" subtitle={SUBTITLE} icon={BoltIcon}>
         <Spin />
       </Card>
     );
@@ -96,7 +90,7 @@ export default function GetVixFgiScore() {
 
   if (error) {
     return (
-      <Card title="지금 투자 타이밍인가요?" subtitle="VIX + FGI 기반 종합 점수" icon={BoltIcon}>
+      <Card title="지금 투자 타이밍인가요?" subtitle={SUBTITLE} icon={BoltIcon}>
         <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
       </Card>
     );
@@ -104,11 +98,15 @@ export default function GetVixFgiScore() {
 
   const fgiDesc  = fgi?.description?.toLowerCase() ?? "";
   const fgiLabel = FGI_LABEL[fgiDesc] ?? { ko: fgiDesc, color: "text-gray-300" };
-  const vixVal   = vix ? parseFloat(vix.value) : null;
-  const vixLabel = vixVal != null ? getVixLabel(vixVal) : null;
+
+  const rsiColor = detail?.rsi < 30 ? "text-green-400"
+    : detail?.rsi > 70 ? "text-red-400"
+    : "text-gray-300";
+
+  const ma200Color = detail?.ma200_pct >= 0 ? "text-red-400" : "text-blue-400";
 
   return (
-    <Card title="지금 투자 타이밍인가요?" subtitle="VIX + FGI 기반 종합 점수" icon={BoltIcon}>
+    <Card title="지금 투자 타이밍인가요?" subtitle={SUBTITLE} icon={BoltIcon}>
       {/* 종합 점수 */}
       <div className="text-center text-3xl font-bold text-blue-400 mb-3">
         {displayScore}
@@ -133,30 +131,40 @@ export default function GetVixFgiScore() {
         </div>
       )}
 
-      {/* FGI / VIX 구성 지표 */}
-      {(fgi || vix) && (
-        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-gray-700 pt-3">
+      {/* 구성 지표 */}
+      {detail && (
+        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-gray-700 pt-3">
           {fgi && (
             <div className="text-center">
-              <p className="text-[11px] text-gray-500">공포 탐욕 지수</p>
+              <p className="text-[11px] text-gray-500">공포탐욕지수</p>
               <p className={`text-sm font-semibold mt-0.5 ${fgiLabel.color}`}>
                 {fgi.value.toFixed(1)}
                 <span className="text-[10px] text-gray-600 ml-0.5">/ 100</span>
               </p>
               <p className={`text-[10px] mt-0.5 ${fgiLabel.color}`}>{fgiLabel.ko}</p>
-              <p className="text-[10px] text-gray-600">CNN Fear &amp; Greed</p>
+              <p className="text-[10px] text-gray-600">CNN FGI</p>
             </div>
           )}
-          {vix && vixLabel && (
-            <div className="text-center border-l border-gray-700">
-              <p className="text-[11px] text-gray-500">변동성 지수</p>
-              <p className={`text-sm font-semibold mt-0.5 ${vixLabel.color}`}>
-                {vixVal.toFixed(2)}
-              </p>
-              <p className={`text-[10px] mt-0.5 ${vixLabel.color}`}>{vixLabel.ko}</p>
-              <p className="text-[10px] text-gray-600">CBOE VIX</p>
-            </div>
-          )}
+          <div className="text-center border-x border-gray-700">
+            <p className="text-[11px] text-gray-500">S&amp;P500 RSI</p>
+            <p className={`text-sm font-semibold mt-0.5 ${rsiColor}`}>
+              {detail.rsi?.toFixed(1)}
+            </p>
+            <p className={`text-[10px] mt-0.5 ${rsiColor}`}>
+              {detail.rsi < 30 ? "과매도" : detail.rsi > 70 ? "과매수" : "중립"}
+            </p>
+            <p className="text-[10px] text-gray-600">14일 RSI</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[11px] text-gray-500">MA200 대비</p>
+            <p className={`text-sm font-semibold mt-0.5 ${ma200Color}`}>
+              {detail.ma200_pct >= 0 ? "+" : ""}{detail.ma200_pct?.toFixed(1)}%
+            </p>
+            <p className="text-[10px] mt-0.5 text-gray-500">
+              {detail.ma200_pct >= 0 ? "추세 상방" : "추세 하방"}
+            </p>
+            <p className="text-[10px] text-gray-600">S&amp;P500 200일선</p>
+          </div>
         </div>
       )}
 
@@ -177,6 +185,11 @@ export default function GetVixFgiScore() {
           );
         })}
       </div>
+
+      {/* 투자 유의문구 */}
+      <p className="mt-4 text-[10px] text-gray-600 leading-relaxed border-t border-gray-800 pt-3">
+        ※ 본 점수는 시장 심리 참고용 지표이며, 투자 판단의 근거로 사용하지 마세요. 투자 손실에 대한 책임은 투자자 본인에게 있습니다.
+      </p>
     </Card>
   );
 }

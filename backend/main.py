@@ -377,9 +377,53 @@ def get_score():
     def _fetch():
         fgi = fetch_fgi()
         fgi_score = float(fgi["score"])
-        vix_value, _ = fetch_vix_latest()
-        vix_score = max(0.0, min(100.0, (40 - vix_value) / 30 * 100))
-        return {"score": round(0.6 * fgi_score + 0.4 * vix_score, 1)}
+
+        sp = yf.Ticker("^GSPC").history(period="1y")
+        if sp.empty or len(sp) < 20:
+            raise HTTPException(503, "S&P500 데이터를 가져올 수 없습니다.")
+
+        close = sp["Close"]
+
+        # 14일 RSI (높을수록 과매수=탐욕, 낮을수록 과매도=공포)
+        delta = close.diff()
+        gain  = delta.clip(lower=0).rolling(14).mean()
+        loss  = (-delta.clip(upper=0)).rolling(14).mean()
+        rs    = gain / loss.replace(0, 1e-10)
+        rsi_val   = float((100 - 100 / (1 + rs)).iloc[-1])
+        rsi_score = max(0.0, min(100.0, rsi_val))
+
+        # S&P500 vs MA200 (위=탐욕, 아래=공포)
+        current      = float(close.iloc[-1])
+        ma200        = float(close.tail(200).mean()) if len(close) >= 200 else float(close.mean())
+        ma200_dev    = (current - ma200) / ma200 * 100
+        ma200_score  = max(0.0, min(100.0, ma200_dev / 20 * 50 + 50))
+
+        # HYG 신용 모멘텀 (상승=신용여건 양호=탐욕, 하락=공포)
+        hyg = yf.Ticker("HYG").history(period="2mo")
+        if len(hyg) >= 21:
+            hyg_current = float(hyg["Close"].iloc[-1])
+            hyg_ma20    = float(hyg["Close"].tail(20).mean())
+            hyg_dev     = (hyg_current - hyg_ma20) / hyg_ma20 * 100
+            hyg_score   = max(0.0, min(100.0, hyg_dev / 5 * 50 + 50))
+        else:
+            hyg_score = 50.0
+
+        score = round(
+            0.35 * fgi_score
+            + 0.25 * rsi_score
+            + 0.20 * ma200_score
+            + 0.20 * hyg_score,
+            1,
+        )
+        return {
+            "score":      score,
+            "fgi_score":  round(fgi_score, 1),
+            "rsi":        round(rsi_val, 1),
+            "rsi_score":  round(rsi_score, 1),
+            "ma200_pct":  round(ma200_dev, 2),
+            "ma200_score": round(ma200_score, 1),
+            "hyg_score":  round(hyg_score, 1),
+        }
     return _get_cached("score", _fetch)
 
 
@@ -566,10 +610,11 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
             raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
 
         # ETF/KR 실제 컬럼: Price, ChangeRate (Close/ChagesRatio 아님)
-        price_col = next((c for c in ["Price", "Close"] if c in df.columns), None)
-        rate_col  = next((c for c in ["ChangeRate", "ChagesRatio", "ChgRatio"] if c in df.columns), None)
+        price_col  = next((c for c in ["Price", "Close"] if c in df.columns), None)
+        rate_col   = next((c for c in ["ChangeRate", "ChagesRatio", "ChgRatio"] if c in df.columns), None)
+        marcap_col = next((c for c in ["Marcap", "MarCap", "marcap"] if c in df.columns), None)
 
-        for col in ["Volume", "Amount", price_col, rate_col]:
+        for col in ["Volume", "Amount", price_col, rate_col, marcap_col]:
             if col and col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -578,7 +623,9 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
 
         chg = df[rate_col].fillna(0.0) if rate_col else pd.Series(0.0, index=df.index)
 
-        if type == "volume" and "Volume" in df.columns:
+        if type == "popular" and marcap_col:
+            sorted_df = df[df[marcap_col].fillna(0) > 0].sort_values(marcap_col, ascending=False)
+        elif type == "volume" and "Volume" in df.columns:
             sorted_df = df.sort_values("Volume", ascending=False)
         elif type == "rising":
             sorted_df = df[chg > 0].sort_values(rate_col or "Volume", ascending=False)
@@ -594,10 +641,11 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
 
         result = []
         for rank, (_, row) in enumerate(top.iterrows(), 1):
-            price_val  = row.get(price_col) if price_col else None
-            rate_val   = row.get(rate_col)  if rate_col  else None
+            price_val  = row.get(price_col)  if price_col  else None
+            rate_val   = row.get(rate_col)   if rate_col   else None
             vol_val    = row.get("Volume")
             amt_val    = row.get("Amount")
+            mc_val     = row.get(marcap_col) if marcap_col else None
             result.append({
                 "rank": rank,
                 "ticker": str(row.get("Symbol", row.get("Code", ""))),
@@ -606,6 +654,7 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
                 "change_rate": round(float(rate_val), 2) if rate_val is not None and pd.notna(rate_val) else 0.0,
                 "volume": int(vol_val) if vol_val is not None and pd.notna(vol_val) else 0,
                 "amount": int(amt_val) if amt_val is not None and pd.notna(amt_val) else 0,
+                "marcap": int(mc_val) if mc_val is not None and pd.notna(mc_val) else 0,
             })
         return result
 
@@ -614,10 +663,11 @@ def get_etf(type: str = Query("amount"), limit: int = Query(20)):
 
 def _etf_kr_rows(df, type: str, limit: int):
     """ETF/KR DataFrame → 공통 정렬·직렬화 로직."""
-    price_col = next((c for c in ["Price", "Close"] if c in df.columns), None)
-    rate_col  = next((c for c in ["ChangeRate", "ChagesRatio", "ChgRatio"] if c in df.columns), None)
+    price_col  = next((c for c in ["Price", "Close"] if c in df.columns), None)
+    rate_col   = next((c for c in ["ChangeRate", "ChagesRatio", "ChgRatio"] if c in df.columns), None)
+    marcap_col = next((c for c in ["Marcap", "MarCap", "marcap"] if c in df.columns), None)
 
-    for col in ["Volume", "Amount", price_col, rate_col]:
+    for col in ["Volume", "Amount", price_col, rate_col, marcap_col]:
         if col and col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -626,7 +676,9 @@ def _etf_kr_rows(df, type: str, limit: int):
 
     chg = df[rate_col].fillna(0.0) if rate_col else pd.Series(0.0, index=df.index)
 
-    if type == "volume" and "Volume" in df.columns:
+    if type == "popular" and marcap_col:
+        sorted_df = df[df[marcap_col].fillna(0) > 0].sort_values(marcap_col, ascending=False)
+    elif type == "volume" and "Volume" in df.columns:
         sorted_df = df.sort_values("Volume", ascending=False)
     elif type == "rising":
         sorted_df = df[chg > 0].sort_values(rate_col or "Volume", ascending=False)
@@ -638,10 +690,11 @@ def _etf_kr_rows(df, type: str, limit: int):
 
     result = []
     for rank, (_, row) in enumerate(sorted_df.head(limit).iterrows(), 1):
-        price_val = row.get(price_col) if price_col else None
-        rate_val  = row.get(rate_col)  if rate_col  else None
+        price_val = row.get(price_col)  if price_col  else None
+        rate_val  = row.get(rate_col)   if rate_col   else None
         vol_val   = row.get("Volume")
         amt_val   = row.get("Amount")
+        mc_val    = row.get(marcap_col) if marcap_col else None
         result.append({
             "rank": rank,
             "ticker": str(row.get("Symbol", row.get("Code", ""))),
@@ -650,6 +703,7 @@ def _etf_kr_rows(df, type: str, limit: int):
             "change_rate": round(float(rate_val), 2) if rate_val is not None and pd.notna(rate_val) else 0.0,
             "volume": int(vol_val) if vol_val is not None and pd.notna(vol_val) else 0,
             "amount": int(amt_val) if amt_val is not None and pd.notna(amt_val) else 0,
+            "marcap": int(mc_val) if mc_val is not None and pd.notna(mc_val) else 0,
         })
     return result
 
@@ -751,6 +805,7 @@ def get_etf_us(type: str = Query("amount"), limit: int = Query(20)):
         elif type == "falling":
             df = df[df["change_rate"] < 0].sort_values("change_rate")
         else:
+            # popular 포함 기본값: 거래대금 순 (US ETF는 AUM API 없이 거래대금이 가장 유효한 인기 지표)
             df = df.sort_values("amount", ascending=False)
 
         result = []
@@ -763,6 +818,7 @@ def get_etf_us(type: str = Query("amount"), limit: int = Query(20)):
                 "change_rate": row["change_rate"],
                 "volume": int(row["volume"]),
                 "amount": int(row["amount"]),
+                "marcap": 0,
             })
         return result
 

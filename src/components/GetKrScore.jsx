@@ -239,6 +239,11 @@ export default function GetKrScore() {
           );
         })}
       </div>
+
+      {/* 투자 유의문구 */}
+      <p className="mt-4 text-[10px] text-gray-600 leading-relaxed border-t border-gray-800 pt-3">
+        ※ 본 점수는 시장 심리 참고용 지표이며, 투자 판단의 근거로 사용하지 마세요. 투자 손실에 대한 책임은 투자자 본인에게 있습니다.
+      </p>
     </Card>
   );
 }
