@@ -57,19 +57,26 @@ function formatVolume(value) {
   return value.toLocaleString("ko-KR") + "주";
 }
 
-function EtfTable({ stocks, filter, isUs }) {
+function EtfTable({ stocks, filter, isUs, currency, usdKrw }) {
   const isPopular = filter === "popular";
   const isAmount  = filter === "amount";
   const isVolume  = filter === "volume";
+  const showKrw   = isUs && currency === "krw" && usdKrw;
 
   function priceStr(stock) {
     if (!isUs) return stock.price ? stock.price.toLocaleString("ko-KR") + "원" : "-";
+    if (showKrw) return stock.price ? Math.round(stock.price * usdKrw).toLocaleString("ko-KR") + "원" : "-";
     return stock.price ? "$" + stock.price.toFixed(2) : "-";
   }
 
+  function fmtUsAmount(val) {
+    if (showKrw) return formatWon(Math.round(val * usdKrw));
+    return formatUsd(val);
+  }
+
   function metricValue(stock) {
-    if (isPopular) return isUs ? formatUsd(stock.amount) : formatWon(stock.marcap);
-    if (isAmount)  return isUs ? formatUsd(stock.amount) : formatWon(stock.amount);
+    if (isPopular) return isUs ? fmtUsAmount(stock.amount) : formatWon(stock.marcap);
+    if (isAmount)  return isUs ? fmtUsAmount(stock.amount) : formatWon(stock.amount);
     if (isVolume)  return formatVolume(stock.volume);
     return priceStr(stock);
   }
@@ -121,6 +128,8 @@ function EtfTable({ stocks, filter, isUs }) {
 export default function EtfList() {
   const [market, setMarket]       = useState("kr");
   const [filter, setFilter]       = useState("popular");
+  const [currency, setCurrency]   = useState("usd");
+  const [usdKrw, setUsdKrw]       = useState(null);
   const [stocks, setStocks]       = useState([]);
   const [fetchedAt, setFetchedAt] = useState(null);
   const [loading, setLoading]     = useState(true);
@@ -138,6 +147,7 @@ export default function EtfList() {
       .then((res) => {
         setStocks(res.data.items ?? res.data ?? []);
         setFetchedAt(new Date());
+        setUsdKrw(res.data.usd_krw ?? null);
       })
       .catch((err) => setError(parseError(err)))
       .finally(() => setLoading(false));
@@ -150,20 +160,39 @@ export default function EtfList() {
     setFetchedAt(null);
   }
 
+  const isUs = market === "us";
+
   return (
     <>
-      {/* 시장 탭 */}
-      <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5 mb-4">
-        {MARKET_TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => handleMarketChange(t.id)}
-            className={`flex-1 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap
-              ${market === t.id ? "bg-blue-500 text-white" : "text-gray-400 hover:text-gray-200"}`}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* 시장 탭 + 원/달러 토글 */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex flex-1 gap-1 bg-gray-700/40 rounded-full p-0.5">
+          {MARKET_TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => handleMarketChange(t.id)}
+              className={`flex-1 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap
+                ${market === t.id ? "bg-blue-500 text-white" : "text-gray-400 hover:text-gray-200"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {isUs && (
+          <div className="flex gap-0.5 bg-gray-700/40 rounded-full p-0.5 shrink-0">
+            {[{ id: "usd", label: "USD" }, { id: "krw", label: "원" }].map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setCurrency(c.id)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  currency === c.id ? "bg-blue-500 text-white" : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 필터 탭 */}
@@ -187,7 +216,7 @@ export default function EtfList() {
         ) : error ? (
           <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
         ) : (
-          <EtfTable stocks={stocks} filter={filter} isUs={market === "us"} />
+          <EtfTable stocks={stocks} filter={filter} isUs={isUs} currency={currency} usdKrw={usdKrw} />
         )}
       </div>
     </>

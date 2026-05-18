@@ -35,6 +35,8 @@ function ChangeRate({ value }) {
 export default function StockRanking() {
   const [market, setMarket] = useState("domestic");
   const [filter, setFilter] = useState("amount");
+  const [currency, setCurrency] = useState("usd");
+  const [usdKrw, setUsdKrw] = useState(null);
   const [stocks, setStocks] = useState([]);
   const [fetchedAt, setFetchedAt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -51,8 +53,10 @@ export default function StockRanking() {
       .then((res) => {
         if (market === "overseas") {
           setStocks(res.data.stocks ?? []);
+          setUsdKrw(res.data.usd_krw ?? null);
         } else {
           setStocks(res.data.items ?? res.data ?? []);
+          setUsdKrw(null);
         }
         setFetchedAt(new Date());
       })
@@ -64,19 +68,15 @@ export default function StockRanking() {
 
   function formatPrice(stock) {
     if (!isOverseas) return (stock.price ?? 0).toLocaleString("ko-KR") + "원";
-    return (
-      "$" +
-      (stock.price_usd ?? 0).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    );
+    if (currency === "krw" && usdKrw)
+      return (stock.price_krw ?? Math.round((stock.price_usd ?? 0) * usdKrw)).toLocaleString("ko-KR") + "원";
+    return "$" + (stock.price_usd ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   return (
     <div>
-      {/* 국내/해외 토글 */}
-      <div className="flex items-center mb-3">
+      {/* 국내/해외 토글 + 원/달러 토글 */}
+      <div className="flex items-center justify-between mb-3">
         <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5">
           {MARKETS.map((m) => (
             <button
@@ -90,6 +90,21 @@ export default function StockRanking() {
             </button>
           ))}
         </div>
+        {isOverseas && (
+          <div className="flex gap-0.5 bg-gray-700/40 rounded-full p-0.5">
+            {[{ id: "usd", label: "USD" }, { id: "krw", label: "원" }].map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setCurrency(c.id)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  currency === c.id ? "bg-blue-500 text-white" : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 업데이트 시각 */}

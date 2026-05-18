@@ -168,6 +168,11 @@ def get_commodities():
             ("CC=F",  "코코아",     "$/톤"),
             ("KC=F",  "커피",       "¢/파운드"),
         ]
+        usd_krw = None
+        try:
+            usd_krw = _get_usd_krw()
+        except Exception:
+            pass
         result = []
         for ticker, name, unit in ITEMS:
             try:
@@ -187,7 +192,7 @@ def get_commodities():
                 })
             except Exception:
                 pass
-        return result
+        return {"usd_krw": usd_krw, "items": result}
     return _get_cached("commodities", fetch)
 
 
@@ -808,6 +813,12 @@ def get_etf_us(type: str = Query("amount"), limit: int = Query(20)):
             # popular 포함 기본값: 거래대금 순 (US ETF는 AUM API 없이 거래대금이 가장 유효한 인기 지표)
             df = df.sort_values("amount", ascending=False)
 
+        usd_krw = None
+        try:
+            usd_krw = _get_usd_krw()
+        except Exception:
+            pass
+
         result = []
         for rank, (_, row) in enumerate(df.head(limit).iterrows(), 1):
             result.append({
@@ -820,7 +831,7 @@ def get_etf_us(type: str = Query("amount"), limit: int = Query(20)):
                 "amount": int(row["amount"]),
                 "marcap": 0,
             })
-        return result
+        return {"usd_krw": usd_krw, "items": result}
 
     return _get_cached(f"etf_us_{type}", fetch)
 
