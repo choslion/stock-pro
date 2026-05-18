@@ -36,8 +36,6 @@ export default function StockRanking() {
   const [market, setMarket] = useState("domestic");
   const [filter, setFilter] = useState("amount");
   const [stocks, setStocks] = useState([]);
-  const [usdKrw, setUsdKrw] = useState(null);
-  const [currency, setCurrency] = useState("krw");
   const [fetchedAt, setFetchedAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -53,10 +51,8 @@ export default function StockRanking() {
       .then((res) => {
         if (market === "overseas") {
           setStocks(res.data.stocks ?? []);
-          setUsdKrw(res.data.usd_krw ?? null);
         } else {
           setStocks(res.data.items ?? res.data ?? []);
-          setUsdKrw(null);
         }
         setFetchedAt(new Date());
       })
@@ -68,67 +64,36 @@ export default function StockRanking() {
 
   function formatPrice(stock) {
     if (!isOverseas) return (stock.price ?? 0).toLocaleString("ko-KR") + "원";
-    if (currency === "usd")
-      return (
-        "$" +
-        (stock.price_usd ?? 0).toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })
-      );
-    return (stock.price_krw ?? 0).toLocaleString("ko-KR") + "원";
+    return (
+      "$" +
+      (stock.price_usd ?? 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    );
   }
 
   return (
     <div>
-      {/* 국내/해외 + 원/달러 토글 */}
-      <div className="flex items-center justify-between mb-3">
+      {/* 국내/해외 토글 */}
+      <div className="flex items-center mb-3">
         <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5">
           {MARKETS.map((m) => (
             <button
               key={m.id}
-              onClick={() => {
-                setMarket(m.id);
-                setFilter("amount");
-                setCurrency("krw");
-              }}
+              onClick={() => { setMarket(m.id); setFilter("amount"); }}
               className={`px-4 py-1 rounded-full text-sm font-medium transition-colors ${
-                market === m.id
-                  ? "bg-blue-500 text-white"
-                  : "text-gray-400 hover:text-gray-200"
+                market === m.id ? "bg-blue-500 text-white" : "text-gray-400 hover:text-gray-200"
               }`}
             >
               {m.label}
             </button>
           ))}
         </div>
-
-        {isOverseas && (
-          <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5">
-            {["krw", "usd"].map((c) => (
-              <button
-                key={c}
-                onClick={() => setCurrency(c)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  currency === c
-                    ? "bg-blue-500 text-white"
-                    : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {c === "krw" ? "원" : "달러"}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* 업데이트 시각 */}
       <div className="flex items-center justify-between mb-2 min-h-[16px]">
-        {isOverseas && usdKrw && (
-          <p className="text-xs text-gray-500">
-            1 USD = {usdKrw.toLocaleString("ko-KR")}원
-          </p>
-        )}
         {fetchedAt && (
           <p className="text-xs text-gray-500 ml-auto">
             {fetchedAt.toLocaleTimeString("ko-KR", {
@@ -164,31 +129,34 @@ export default function StockRanking() {
           />
         ) : (
           <>
-            <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
-              <span className="col-span-2 whitespace-nowrap">순위</span>
-              <span className="col-span-4">종목명</span>
-              <span className="col-span-3 text-right">현재가</span>
-              <span className="col-span-3 text-right">등락률</span>
+            <div className="flex items-center gap-2 px-2 pb-2 border-b border-gray-700 text-xs text-gray-500">
+              <span className="w-8 shrink-0">순위</span>
+              <span className="flex-1">종목명</span>
+              <span className="shrink-0">등락률</span>
             </div>
 
             <div className="divide-y divide-gray-700/50">
               {stocks.map((stock) => (
                 <div
                   key={stock.ticker}
-                  className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
+                  className="px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
                 >
-                  <span className="col-span-2 text-gray-500 text-sm">
-                    {stock.rank}
-                  </span>
-                  <span className="col-span-4 text-sm font-medium truncate pr-2">
-                    {stock.name}
-                  </span>
-                  <span className="col-span-3 text-right text-sm text-gray-300">
-                    {formatPrice(stock)}
-                  </span>
-                  <span className="col-span-3 text-right text-sm">
-                    <ChangeRate value={stock.change_rate} />
-                  </span>
+                  {/* 1행: 순위 + 종목명 + 등락률 */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 shrink-0 text-gray-500 text-xs tabular-nums">
+                      {stock.rank}
+                    </span>
+                    <p className="flex-1 text-sm font-medium">{stock.name}</p>
+                    <span className="shrink-0 text-sm">
+                      <ChangeRate value={stock.change_rate} />
+                    </span>
+                  </div>
+                  {/* 2행: 현재가 (w-8 + gap-2 = pl-10) */}
+                  <div className="pl-10 mt-0.5">
+                    <p className="text-[11px] text-gray-500 tabular-nums">
+                      {formatPrice(stock)}
+                    </p>
+                  </div>
                 </div>
               ))}
 

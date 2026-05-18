@@ -49,7 +49,6 @@ export default function InvestorTrends() {
   }, [retryCount]);
 
   const rows = data?.[subTab] ?? [];
-  const subLabel = subTab === "marcap" ? "시가총액" : "거래대금";
 
   return (
     <div className="min-h-[480px]">
@@ -73,36 +72,37 @@ export default function InvestorTrends() {
             />
           </div>
 
-          <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
-            <span className="col-span-2 whitespace-nowrap">순위</span>
-            <span className="col-span-4">종목명</span>
-            <span className="col-span-3 text-right">{subLabel}</span>
-            <span className="col-span-3 text-right">등락률</span>
+          <div className="flex items-center gap-2 px-2 pb-2 border-b border-gray-700 text-xs text-gray-500">
+            <span className="w-8 shrink-0">순위</span>
+            <span className="flex-1">종목명</span>
+            <span className="shrink-0">등락률</span>
           </div>
 
           <div className="divide-y divide-gray-700/50">
             {rows.map((row) => (
               <div
                 key={row.ticker}
-                className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
+                className="px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
               >
-                <span className="col-span-2 text-blue-400 font-bold text-sm">
-                  {row.rank}
-                </span>
-                <div className="col-span-4 pr-2">
-                  <p className="text-sm font-medium truncate">{row.name}</p>
-                  <p className="text-xs text-gray-500">
+                {/* 1행: 순위 + 종목명 + 등락률 */}
+                <div className="flex items-center gap-2">
+                  <span className="w-8 shrink-0 text-gray-500 text-xs tabular-nums">
+                    {row.rank}
+                  </span>
+                  <p className="flex-1 text-sm font-medium">{row.name}</p>
+                  <span className="shrink-0">
+                    <ChangeRate value={row.change_rate} />
+                  </span>
+                </div>
+                {/* 2행: 현재가(좌) + 시가총액·거래대금(우) */}
+                <div className="flex items-center pl-10 mt-0.5">
+                  <p className="flex-1 text-[11px] text-gray-500 tabular-nums">
                     {row.price.toLocaleString("ko-KR")}원
                   </p>
+                  <p className="shrink-0 text-[11px] text-gray-500 tabular-nums">
+                    {subTab === "marcap" ? formatWon(row.marcap) : formatWon(row.amount)}
+                  </p>
                 </div>
-                <span className="col-span-3 text-right text-sm text-gray-300">
-                  {subTab === "marcap"
-                    ? formatWon(row.marcap)
-                    : formatWon(row.amount)}
-                </span>
-                <span className="col-span-3 text-right">
-                  <ChangeRate value={row.change_rate} />
-                </span>
               </div>
             ))}
 

@@ -48,6 +48,8 @@ export default function Commodities() {
           const isPositive = item.change_pct > 0;
           const isNeutral  = item.change_pct === 0;
           const color = isNeutral ? "text-gray-400" : isPositive ? "text-red-400" : "text-blue-400";
+          const priceStr = "$" + item.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const changeStr = (isPositive ? "+" : "") + item.change.toFixed(2);
           return (
             <div key={item.ticker} className="grid grid-cols-12 items-center px-2 py-3 hover:bg-gray-700/20 transition-colors">
               <div className="col-span-4">
@@ -55,10 +57,8 @@ export default function Commodities() {
                 <p className="text-xs text-gray-500">{item.unit}</p>
               </div>
               <div className="col-span-4 text-right">
-                <p className="text-sm text-gray-200 tabular-nums">${item.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                <p className={`text-xs tabular-nums ${color}`}>
-                  {isPositive ? "+" : ""}{item.change.toFixed(2)}
-                </p>
+                <p className="text-sm text-gray-200 tabular-nums">{priceStr}</p>
+                <p className={`text-xs tabular-nums ${color}`}>{changeStr}</p>
               </div>
               <div className="col-span-4 text-right">
                 <span className={`text-sm font-bold tabular-nums ${color}`}>
