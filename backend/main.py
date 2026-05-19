@@ -1358,9 +1358,10 @@ def _build_market_snapshot() -> str:
     # 원자재 (상위 5개)
     cmd_entry = _cache.get("commodities")
     if cmd_entry and cmd_entry.get("data"):
-        items = cmd_entry["data"][:5]
+        raw = cmd_entry["data"]
+        cmd_items = (raw["items"] if isinstance(raw, dict) else raw)[:5]
         lines.append("## 주요 원자재")
-        for it in items:
+        for it in cmd_items:
             sign = "+" if it["change_pct"] >= 0 else ""
             lines.append(f"- {it['name']}: ${it['value']:,.2f} ({sign}{it['change_pct']:.2f}%)")
 
