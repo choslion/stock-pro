@@ -164,22 +164,32 @@ export default function EtfList() {
 
   return (
     <>
-      {/* 시장 탭 + 원/달러 토글 */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="flex flex-1 gap-1 bg-gray-700/40 rounded-full p-0.5">
-          {MARKET_TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => handleMarketChange(t.id)}
-              className={`flex-1 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap
-                ${market === t.id ? "bg-blue-500 text-white" : "text-gray-400 hover:text-gray-200"}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      {/* 시장 탭 */}
+      <div className="flex gap-1 bg-gray-700/40 rounded-full p-0.5 mb-4">
+        {MARKET_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => handleMarketChange(t.id)}
+            className={`flex-1 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap
+              ${market === t.id ? "bg-blue-500 text-white" : "text-gray-400 hover:text-gray-200"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 필터 탭 */}
+      <div className="mb-4">
+        <ScrollTabs tabs={FILTERS} activeId={filter} onChange={setFilter} ariaLabel="ETF 필터" />
+      </div>
+
+      <div className="flex items-center justify-between mb-2 min-h-[20px]">
+        {fetchedAt
+          ? <p className="text-xs text-gray-500">{fetchedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준</p>
+          : <span />
+        }
         {isUs && (
-          <div className="flex gap-0.5 bg-gray-700/40 rounded-full p-0.5 shrink-0">
+          <div className="flex gap-0.5 bg-gray-700/40 rounded-full p-0.5">
             {[{ id: "usd", label: "USD" }, { id: "krw", label: "원" }].map((c) => (
               <button
                 key={c.id}
@@ -192,19 +202,6 @@ export default function EtfList() {
               </button>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* 필터 탭 */}
-      <div className="mb-4">
-        <ScrollTabs tabs={FILTERS} activeId={filter} onChange={setFilter} ariaLabel="ETF 필터" />
-      </div>
-
-      <div className="flex items-center justify-end mb-2 min-h-[16px]">
-        {fetchedAt && (
-          <p className="text-xs text-gray-500">
-            {fetchedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준
-          </p>
         )}
       </div>
 
