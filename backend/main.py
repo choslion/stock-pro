@@ -1382,7 +1382,7 @@ def _build_market_snapshot() -> str:
         secs = sorted(sec_entry["data"], key=lambda x: x.get("change_pct", 0), reverse=True)
         lines.append("## 미국 섹터 동향")
         for s in secs[:3]:
-            sign = "+" if s["change_pct"] >= 0 else ""
+            sign = "+" if s.get("change_pct", 0) >= 0 else ""
             lines.append(f"- {s['name']} 강세: {sign}{s['change_pct']:.2f}%")
         for s in secs[-2:]:
             sign = "+" if s["change_pct"] >= 0 else ""
