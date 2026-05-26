@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
+import useAutoRefresh from "../hooks/useAutoRefresh";
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
@@ -39,6 +40,7 @@ export default function ThemeSectors() {
   const [krError, setKrError]           = useState("");
   const [usError, setUsError]           = useState("");
   const [retryCount, setRetryCount]     = useState(0);
+  useAutoRefresh(() => setRetryCount((c) => c + 1));
 
   const theme = THEMES.find((t) => t.id === themeId) ?? THEMES[0];
 
@@ -237,3 +239,4 @@ export default function ThemeSectors() {
     </Card>
   );
 }
+

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
+import useAutoRefresh from "../hooks/useAutoRefresh";
 import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -39,6 +40,7 @@ export default function InvestorTrends() {
   const [error, setError] = useState("");
   const [subTab, setSubTab] = useState("marcap");
   const [retryCount, setRetryCount] = useState(0);
+  useAutoRefresh(() => setRetryCount((c) => c + 1));
 
   useEffect(() => {
     axiosInstance
@@ -117,3 +119,5 @@ export default function InvestorTrends() {
     </div>
   );
 }
+
+

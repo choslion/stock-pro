@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
+import useAutoRefresh from "../hooks/useAutoRefresh";
 import axiosInstance from "../lib/axiosInstance";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
@@ -15,6 +16,7 @@ export default function GetSp500() {
   const [data, setData]           = useState(null);
   const [error, setError]         = useState("");
   const [retryCount, setRetryCount] = useState(0);
+  useAutoRefresh(() => setRetryCount((c) => c + 1));
 
   useEffect(() => {
     setData(null);
@@ -72,3 +74,5 @@ export default function GetSp500() {
     </Card>
   );
 }
+
+

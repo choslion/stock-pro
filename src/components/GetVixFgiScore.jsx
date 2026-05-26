@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
+import useAutoRefresh from "../hooks/useAutoRefresh";
 import {
   motion,
   useSpring,
@@ -43,6 +44,7 @@ export default function GetVixFgiScore() {
   const [error, setError]               = useState("");
   const [loading, setLoading]           = useState(true);
   const [retryCount, setRetryCount]     = useState(0);
+  useAutoRefresh(() => setRetryCount((c) => c + 1));
   const [displayScore, setDisplayScore] = useState("0.0");
   const [score, setScore]               = useState(0);
   const [meta, setMeta]                 = useState(null);
@@ -193,3 +195,4 @@ export default function GetVixFgiScore() {
     </Card>
   );
 }
+

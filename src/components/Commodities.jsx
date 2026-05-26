@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
+import useAutoRefresh from "../hooks/useAutoRefresh";
 import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -18,6 +19,7 @@ export default function Commodities() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   const [retryCount, setRetryCount] = useState(0);
+  useAutoRefresh(() => setRetryCount((c) => c + 1));
 
   useEffect(() => {
     setLoading(true);
@@ -97,3 +99,5 @@ export default function Commodities() {
     </div>
   );
 }
+
+
