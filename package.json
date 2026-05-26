@@ -11,6 +11,7 @@
     "server": "uvicorn backend.main:app --reload"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.14",
     "axios": "^1.10.0",
     "framer-motion": "^12.19.1",
     "lightweight-charts": "^5.2.0",
