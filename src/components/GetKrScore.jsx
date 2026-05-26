@@ -1,5 +1,6 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import {
   motion,
   useSpring,
@@ -7,7 +8,7 @@ import {
   useTransform,
   animate,
 } from "framer-motion";
-import axiosInstance from "../lib/axiosInstance";
+const MotionDiv = motion.div;
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -15,166 +16,76 @@ import parseError from "../lib/parseError";
 import { ActivityIcon } from "./ui/Icons";
 
 const LEGEND = [
-  {
-    range: "0~20",
-    label: "극단적 공포",
-    action: "매수 기회",
-    color: "text-green-400",
-    dot: "bg-green-400",
-    min: 0,
-    max: 20,
-  },
-  {
-    range: "21~40",
-    label: "공포",
-    action: "분할 매수",
-    color: "text-yellow-300",
-    dot: "bg-yellow-300",
-    min: 21,
-    max: 40,
-  },
-  {
-    range: "41~60",
-    label: "중립",
-    action: "보유/관망",
-    color: "text-gray-300",
-    dot: "bg-gray-400",
-    min: 41,
-    max: 60,
-  },
-  {
-    range: "61~80",
-    label: "탐욕",
-    action: "수익 실현",
-    color: "text-orange-300",
-    dot: "bg-orange-400",
-    min: 61,
-    max: 80,
-  },
-  {
-    range: "81~100",
-    label: "극단적 탐욕",
-    action: "매도 고려",
-    color: "text-red-400",
-    dot: "bg-red-400",
-    min: 81,
-    max: 100,
-  },
+  { range: "0~20",   label: "극단적 공포", action: "매수 기회",  color: "text-green-400",  dot: "bg-green-400",  min: 0,  max: 20  },
+  { range: "21~40",  label: "공포",        action: "분할 매수",  color: "text-yellow-300", dot: "bg-yellow-300", min: 21, max: 40  },
+  { range: "41~60",  label: "중립",        action: "보유/관망",  color: "text-gray-300",   dot: "bg-gray-400",   min: 41, max: 60  },
+  { range: "61~80",  label: "탐욕",        action: "수익 실현",  color: "text-orange-300", dot: "bg-orange-400", min: 61, max: 80  },
+  { range: "81~100", label: "극단적 탐욕", action: "매도 고려",  color: "text-red-400",    dot: "bg-red-400",    min: 81, max: 100 },
 ];
 
 function getMeta(score) {
-  if (score <= 20)
-    return {
-      label: "극단적 공포",
-      advice: "강력한 매수 기회",
-      explanation: "국내 시장이 과도하게 하락한 상태",
-    };
-  if (score <= 40)
-    return {
-      label: "공포",
-      advice: "관망 또는 분할 매수",
-      explanation: "하락 가능성 있지만 일부 진입 고려",
-    };
-  if (score <= 60)
-    return {
-      label: "중립",
-      advice: "보유 또는 관망",
-      explanation: "불확실한 구간, 추세 확인 필요",
-    };
-  if (score <= 80)
-    return {
-      label: "탐욕",
-      advice: "수익 실현 고려",
-      explanation: "가격이 과도하게 오른 구간",
-    };
-  return {
-    label: "극단적 탐욕",
-    advice: "분할 매도 또는 전량 매도 고려",
-    explanation: "시장 과열, 거품 주의 필요",
-  };
+  if (score <= 20) return { label: "극단적 공포", advice: "강력한 매수 기회",             explanation: "국내 시장이 과도하게 하락한 상태"  };
+  if (score <= 40) return { label: "공포",        advice: "관망 또는 분할 매수",           explanation: "하락 가능성 있지만 일부 진입 고려" };
+  if (score <= 60) return { label: "중립",        advice: "보유 또는 관망",                explanation: "불확실한 구간, 추세 확인 필요"     };
+  if (score <= 80) return { label: "탐욕",        advice: "수익 실현 고려",                explanation: "가격이 과도하게 오른 구간"         };
+  return                  { label: "극단적 탐욕", advice: "분할 매도 또는 전량 매도 고려", explanation: "시장 과열, 거품 주의 필요"         };
 }
 
 export default function GetKrScore() {
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
-  const [displayScore, setDisplayScore] = useState("0.0");
-  const [score, setScore] = useState(0);
-  const [meta, setMeta] = useState(null);
-  const [detail, setDetail] = useState(null);
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.krScore(),
+    queryFn:  fetchers.krScore,
+  });
 
+  // framer-motion animation
   const scoreMotion = useMotionValue(0);
   const smoothScore = useSpring(scoreMotion, { stiffness: 70, damping: 20 });
   const smoothWidth = useTransform(smoothScore, (v) => `${Math.min(v, 100)}%`);
+  const [displayScore, setDisplayScore] = useState("0.0");
+
+  const target = data?.score ?? 0;
 
   useEffect(() => {
-    setLoading(true);
-    setError("");
-    axiosInstance
-      .get("/kr-score")
-      .then((res) => {
-        const d = res.data;
-        const target = d.score ?? 0;
-        animate(scoreMotion, target, { duration: 1, ease: [0.22, 1, 0.36, 1] });
-        setScore(target);
-        setMeta(getMeta(target));
-        setDetail(d);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(parseError(err));
-        setLoading(false);
-      });
-  }, [scoreMotion, retryCount]);
+    if (data) {
+      animate(scoreMotion, target, { duration: 1, ease: [0.22, 1, 0.36, 1] });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
 
   useEffect(() => {
-    const unsub = smoothScore.on("change", (v) =>
-      setDisplayScore(v.toFixed(1)),
-    );
+    const unsub = smoothScore.on("change", (v) => setDisplayScore(v.toFixed(1)));
     return () => unsub();
   }, [smoothScore]);
 
-  if (loading) {
+  const score  = target;
+  const meta   = data ? getMeta(score) : null;
+  const detail = data ?? null;
+
+  if (isLoading) {
     return (
-      <Card
-        title="지금 투자 타이밍인가요?"
-        subtitle="KOSPI 변동성 · 추세 · 업종폭 기반"
-        icon={ActivityIcon}
-      >
+      <Card title="지금 투자 타이밍인가요?" subtitle="KOSPI 변동성 · 추세 · 업종폭 기반" icon={ActivityIcon}>
         <Spin />
       </Card>
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
-      <Card
-        title="지금 투자 타이밍인가요?"
-        subtitle="KOSPI 변동성 · 추세 · 업종폭 기반"
-        icon={ActivityIcon}
-      >
-        <ErrorBlock
-          message={error}
-          onRetry={() => setRetryCount((c) => c + 1)}
-        />
+      <Card title="지금 투자 타이밍인가요?" subtitle="KOSPI 변동성 · 추세 · 업종폭 기반" icon={ActivityIcon}>
+        <ErrorBlock message={parseError(error)} onRetry={refetch} />
       </Card>
     );
   }
 
   return (
-    <Card
-      title="지금 투자 타이밍인가요?"
-      subtitle="KOSPI 변동성 · 추세 · 업종폭 기반"
-      icon={ActivityIcon}
-    >
+    <Card title="지금 투자 타이밍인가요?" subtitle="KOSPI 변동성 · 추세 · 업종폭 기반" icon={ActivityIcon}>
       <div className="text-center text-3xl font-bold text-blue-400 mb-3">
         {displayScore}
         <span className="text-xl text-blue-200"> 점</span>
       </div>
 
       <div className="w-full h-5 rounded-full bg-gray-700 overflow-hidden">
-        <motion.div
+        <MotionDiv
           className="h-full rounded-full"
           style={{
             width: smoothWidth,
@@ -203,11 +114,8 @@ export default function GetKrScore() {
           </div>
           <div className="text-center border-x border-gray-700">
             <p className="text-[11px] text-gray-500">20일선 대비</p>
-            <p
-              className={`text-sm font-semibold mt-0.5 ${detail.momentum_pct >= 0 ? "text-red-400" : "text-blue-400"}`}
-            >
-              {detail.momentum_pct >= 0 ? "+" : ""}
-              {detail.momentum_pct}%
+            <p className={`text-sm font-semibold mt-0.5 ${detail.momentum_pct >= 0 ? "text-red-400" : "text-blue-400"}`}>
+              {detail.momentum_pct >= 0 ? "+" : ""}{detail.momentum_pct}%
             </p>
             <p className="text-[10px] text-gray-600">추세 강도</p>
           </div>
@@ -229,13 +137,9 @@ export default function GetKrScore() {
               key={row.range}
               className={`flex items-center gap-2 text-xs transition-opacity ${isActive ? "opacity-100" : "opacity-35"}`}
             >
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 ${row.dot} ${isActive ? "ring-2 ring-white/50" : ""}`}
-              />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${row.dot} ${isActive ? "ring-2 ring-white/50" : ""}`} />
               <span className="w-14 text-gray-500">{row.range}</span>
-              <span className={`w-20 font-medium ${row.color}`}>
-                {row.label}
-              </span>
+              <span className={`w-20 font-medium ${row.color}`}>{row.label}</span>
               <span className="text-gray-400">{row.action}</span>
             </div>
           );
@@ -249,5 +153,3 @@ export default function GetKrScore() {
     </Card>
   );
 }
-
-

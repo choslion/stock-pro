@@ -1,6 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
@@ -14,34 +13,26 @@ function now() {
 }
 
 export default function TrendingUsSectors() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.usSectors(),
+    queryFn:  fetchers.usSectors,
+  });
 
-  useEffect(() => {
-    setError("");
-    axiosInstance
-      .get("/us-sectors")
-      .then((res) => setData(res.data.items ?? res.data ?? []))
-      .catch((err) => setError(parseError(err)))
-      .finally(() => setLoading(false));
-  }, [retryCount]);
+  const items = data?.items ?? data ?? [];
 
   return (
     <div className="min-h-[360px]">
-      {loading ? (
+      {isLoading ? (
         <div className="flex items-center justify-center h-[360px]">
           <Spin />
         </div>
-      ) : error ? (
-        <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
+      ) : error && !data ? (
+        <ErrorBlock message={parseError(error)} onRetry={refetch} />
       ) : (
         <>
           <p className="text-xs text-gray-500 mb-3">{now()} 기준</p>
           <div className="divide-y divide-gray-700/50">
-            {data.map((sector, i) => {
+            {items.map((sector, i) => {
               const isPositive = sector.change_rate > 0;
               const isNeutral  = sector.change_rate === 0;
               const rateColor  = isNeutral ? "text-gray-400" : isPositive ? "text-red-400" : "text-blue-400";
@@ -66,7 +57,7 @@ export default function TrendingUsSectors() {
                 </div>
               );
             })}
-            {data.length === 0 && (
+            {items.length === 0 && (
               <p className="text-gray-500 text-center py-6 text-sm">데이터가 없습니다.</p>
             )}
           </div>
@@ -75,5 +66,3 @@ export default function TrendingUsSectors() {
     </div>
   );
 }
-
-

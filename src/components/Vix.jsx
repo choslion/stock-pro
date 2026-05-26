@@ -1,6 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import SummaryBanner from "./ui/SummaryBanner";
@@ -28,28 +27,19 @@ function getVixMeta(value) {
 }
 
 export default function Vix() {
-  const [data, setData]           = useState(null);
-  const [error, setError]         = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
-
-  useEffect(() => {
-    setData(null);
-    setError("");
-    axiosInstance
-      .get("/vix")
-      .then((res) => setData(res.data))
-      .catch((err) => setError(parseError(err)));
-  }, [retryCount]);
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.vix(),
+    queryFn:  fetchers.vix,
+  });
 
   const meta = data ? getVixMeta(parseFloat(data.value)) : null;
 
   return (
     <Card title="시장 불안 지수" subtitle="CBOE Volatility Index (VIX)" icon={AlertTriangleIcon}>
       <div className="min-h-[200px] flex flex-col justify-center">
-        {error ? (
-          <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
-        ) : !data ? (
+        {error && !data ? (
+          <ErrorBlock message={parseError(error)} onRetry={refetch} />
+        ) : isLoading ? (
           <Spin />
         ) : (
           <>
@@ -68,5 +58,3 @@ export default function Vix() {
     </Card>
   );
 }
-
-

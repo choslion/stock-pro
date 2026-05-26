@@ -1,6 +1,6 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
@@ -8,61 +8,44 @@ import ScrollTabs from "./ui/ScrollTabs";
 
 const SUB_TABS = [
   { id: "marcap", label: "시가총액 상위" },
-  { id: "hot", label: "거래대금 상위" },
+  { id: "hot",    label: "거래대금 상위" },
 ];
 
 function ChangeRate({ value }) {
   const color =
-    value === 0
-      ? "text-gray-400"
-      : value > 0
-        ? "text-red-400"
-        : "text-blue-400";
+    value === 0 ? "text-gray-400" : value > 0 ? "text-red-400" : "text-blue-400";
   return (
     <span className={`text-sm font-semibold ${color}`}>
-      {value > 0 ? "+" : ""}
-      {value.toFixed(2)}%
+      {value > 0 ? "+" : ""}{value.toFixed(2)}%
     </span>
   );
 }
 
 function formatWon(value) {
   if (!value) return "-";
-  if (value >= 1_000_000_000_000)
-    return (value / 1_000_000_000_000).toFixed(1) + "조";
-  if (value >= 100_000_000) return Math.round(value / 100_000_000) + "억";
+  if (value >= 1_000_000_000_000) return (value / 1_000_000_000_000).toFixed(1) + "조";
+  if (value >= 100_000_000)       return Math.round(value / 100_000_000) + "억";
   return value.toLocaleString("ko-KR");
 }
 
 export default function InvestorTrends() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [subTab, setSubTab] = useState("marcap");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
 
-  useEffect(() => {
-    axiosInstance
-      .get("/investor-trends")
-      .then((res) => setData(res.data))
-      .catch((err) => setError(parseError(err)))
-      .finally(() => setLoading(false));
-  }, [retryCount]);
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.investorTrends(),
+    queryFn:  fetchers.investorTrends,
+  });
 
   const rows = data?.[subTab] ?? [];
 
   return (
     <div className="min-h-[480px]">
-      {loading ? (
+      {isLoading ? (
         <div className="flex items-center justify-center h-[480px]">
           <Spin />
         </div>
-      ) : error ? (
-        <ErrorBlock
-          message={error}
-          onRetry={() => setRetryCount((c) => c + 1)}
-        />
+      ) : error && !data ? (
+        <ErrorBlock message={parseError(error)} onRetry={refetch} />
       ) : (
         <>
           <div className="mb-4">
@@ -119,5 +102,3 @@ export default function InvestorTrends() {
     </div>
   );
 }
-
-

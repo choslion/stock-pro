@@ -1,29 +1,23 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
 import ScrollTabs from "./ui/ScrollTabs";
 
 const MARKET_TABS = [
-  { id: "kr",          label: "국내" },
-  { id: "kr_overseas", label: "국내상장 해외" },
-  { id: "us",          label: "미국상장" },
+  { id: "kr",          label: "국내"          },
+  { id: "kr_overseas", label: "국내상장 해외"  },
+  { id: "us",          label: "미국상장"       },
 ];
 
-const MARKET_META = {
-  kr:          { title: "국내 ETF",          subtitle: "국내 상장 ETF 순위",          endpoint: "/etf" },
-  kr_overseas: { title: "국내상장 해외 ETF", subtitle: "해외지수 추종 국내 상장 ETF", endpoint: "/etf-kr-overseas" },
-  us:          { title: "미국상장 ETF",      subtitle: "미국 거래소 상장 ETF 순위",   endpoint: "/etf-us" },
-};
-
 const FILTERS = [
-  { id: "popular", label: "인기" },
+  { id: "popular", label: "인기"   },
   { id: "amount",  label: "거래대금" },
-  { id: "volume",  label: "거래량" },
-  { id: "rising",  label: "급상승" },
-  { id: "falling", label: "급하락" },
+  { id: "volume",  label: "거래량"  },
+  { id: "rising",  label: "급상승"  },
+  { id: "falling", label: "급하락"  },
 ];
 
 function ChangeRate({ value }) {
@@ -84,7 +78,6 @@ function EtfTable({ stocks, filter, isUs, currency, usdKrw }) {
 
   return (
     <>
-      {/* 헤더 */}
       <div className="flex items-center gap-2 px-2 pb-2 border-b border-gray-700 text-xs text-gray-500">
         <span className="w-8 shrink-0">순위</span>
         <span className="flex-1">ETF명</span>
@@ -108,7 +101,7 @@ function EtfTable({ stocks, filter, isUs, currency, usdKrw }) {
             {/* 2행: 현재가(좌) + 지표(우) */}
             <div className="flex items-center pl-10 mt-0.5">
               <p className="flex-1 text-[11px] text-gray-500 tabular-nums">{priceStr(stock)}</p>
-              {!isPopular && !isAmount && !isVolume ? null : (
+              {(isPopular || isAmount || isVolume) && (
                 <p className="shrink-0 text-[11px] text-gray-500 tabular-nums">{metricValue(stock)}</p>
               )}
             </div>
@@ -127,42 +120,24 @@ function EtfTable({ stocks, filter, isUs, currency, usdKrw }) {
 }
 
 export default function EtfList() {
-  const [market, setMarket]       = useState("kr");
-  const [filter, setFilter]       = useState("popular");
-  const [currency, setCurrency]   = useState("usd");
-  const [usdKrw, setUsdKrw]       = useState(null);
-  const [stocks, setStocks]       = useState([]);
-  const [fetchedAt, setFetchedAt] = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
+  const [market, setMarket]     = useState("kr");
+  const [filter, setFilter]     = useState("popular");
+  const [currency, setCurrency] = useState("usd");
 
-  const meta = MARKET_META[market];
+  const { data, error, isLoading, refetch, dataUpdatedAt } = useQuery({
+    queryKey: Q.etf(market, filter),
+    queryFn:  () => fetchers.etf(market, filter),
+  });
 
-  useEffect(() => {
-    setLoading(true);
-    setError("");
-    setStocks([]);
-    axiosInstance
-      .get(meta.endpoint, { params: { type: filter } })
-      .then((res) => {
-        setStocks(res.data.items ?? res.data ?? []);
-        setFetchedAt(new Date());
-        setUsdKrw(res.data.usd_krw ?? null);
-      })
-      .catch((err) => setError(parseError(err)))
-      .finally(() => setLoading(false));
-  }, [market, filter, retryCount, meta.endpoint]);
+  const stocks    = data?.items ?? data ?? [];
+  const usdKrw    = data?.usd_krw ?? null;
+  const fetchedAt = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
+  const isUs      = market === "us";
 
   function handleMarketChange(id) {
     setMarket(id);
     setFilter("popular");
-    setStocks([]);
-    setFetchedAt(null);
   }
-
-  const isUs = market === "us";
 
   return (
     <>
@@ -208,12 +183,12 @@ export default function EtfList() {
       </div>
 
       <div className="min-h-[420px]">
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-[420px]">
             <Spin />
           </div>
-        ) : error ? (
-          <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
+        ) : error && !data ? (
+          <ErrorBlock message={parseError(error)} onRetry={refetch} />
         ) : (
           <EtfTable stocks={stocks} filter={filter} isUs={isUs} currency={currency} usdKrw={usdKrw} />
         )}
@@ -221,5 +196,3 @@ export default function EtfList() {
     </>
   );
 }
-
-

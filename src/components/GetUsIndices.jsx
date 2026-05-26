@@ -1,6 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -62,26 +61,17 @@ function IndexBlock({ label, data, border }) {
 }
 
 export default function GetUsIndices() {
-  const [data, setData]           = useState(null);
-  const [error, setError]         = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
-
-  useEffect(() => {
-    setData(null);
-    setError("");
-    axiosInstance
-      .get("/us-indices")
-      .then((res) => setData(res.data))
-      .catch((err) => setError(parseError(err)));
-  }, [retryCount]);
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.usIndices(),
+    queryFn:  fetchers.usIndices,
+  });
 
   return (
     <Card title="미국 증시" subtitle="S&P 500 · NASDAQ · DOW" icon={TrendingUpIcon}>
       <div className="min-h-[120px] flex flex-col justify-center">
-        {error ? (
-          <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
-        ) : !data ? (
+        {error && !data ? (
+          <ErrorBlock message={parseError(error)} onRetry={refetch} />
+        ) : isLoading ? (
           <div className="flex justify-center py-6"><Spin /></div>
         ) : (
           <>
@@ -103,5 +93,3 @@ export default function GetUsIndices() {
     </Card>
   );
 }
-
-

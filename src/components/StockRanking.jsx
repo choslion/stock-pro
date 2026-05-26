@@ -1,16 +1,16 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
 import ScrollTabs from "./ui/ScrollTabs";
 
 const FILTERS = [
-  { id: "amount", label: "거래대금" },
-  { id: "volume", label: "거래량" },
-  { id: "rising", label: "급상승" },
-  { id: "falling", label: "급하락" },
+  { id: "amount",  label: "거래대금" },
+  { id: "volume",  label: "거래량"   },
+  { id: "rising",  label: "급상승"   },
+  { id: "falling", label: "급하락"   },
 ];
 
 const MARKETS = [
@@ -20,15 +20,10 @@ const MARKETS = [
 
 function ChangeRate({ value }) {
   const color =
-    value === 0
-      ? "text-gray-400"
-      : value > 0
-        ? "text-red-400"
-        : "text-blue-400";
+    value === 0 ? "text-gray-400" : value > 0 ? "text-red-400" : "text-blue-400";
   return (
     <span className={`font-semibold ${color}`}>
-      {value > 0 ? "+" : ""}
-      {value.toFixed(2)}%
+      {value > 0 ? "+" : ""}{value.toFixed(2)}%
     </span>
   );
 }
@@ -37,36 +32,16 @@ export default function StockRanking() {
   const [market, setMarket] = useState("domestic");
   const [filter, setFilter] = useState("amount");
   const [currency, setCurrency] = useState("usd");
-  const [usdKrw, setUsdKrw] = useState(null);
-  const [stocks, setStocks] = useState([]);
-  const [fetchedAt, setFetchedAt] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
 
-  useEffect(() => {
-    setLoading(true);
-    setError("");
-    const url =
-      market === "overseas" ? "/stocks/us-ranking" : "/stocks/ranking";
-    axiosInstance
-      .get(url, { params: { type: filter } })
-      .then((res) => {
-        if (market === "overseas") {
-          setStocks(res.data.stocks ?? []);
-          setUsdKrw(res.data.usd_krw ?? null);
-        } else {
-          setStocks(res.data.items ?? res.data ?? []);
-          setUsdKrw(null);
-        }
-        setFetchedAt(new Date());
-      })
-      .catch((err) => setError(parseError(err)))
-      .finally(() => setLoading(false));
-  }, [market, filter, retryCount]);
+  const { data, error, isLoading, refetch, dataUpdatedAt } = useQuery({
+    queryKey: Q.ranking(market, filter),
+    queryFn:  () => fetchers.ranking(market, filter),
+  });
 
   const isOverseas = market === "overseas";
+  const stocks     = isOverseas ? (data?.stocks ?? []) : (data?.items ?? data ?? []);
+  const usdKrw     = data?.usd_krw ?? null;
+  const fetchedAt  = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   function formatPrice(stock) {
     if (!isOverseas) return (stock.price ?? 0).toLocaleString("ko-KR") + "원";
@@ -113,37 +88,24 @@ export default function StockRanking() {
       <div className="flex items-center justify-between mb-2 min-h-[16px]">
         {fetchedAt && (
           <p className="text-xs text-gray-500 ml-auto">
-            {fetchedAt.toLocaleTimeString("ko-KR", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })}{" "}
-            기준
+            {fetchedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준
           </p>
         )}
       </div>
 
       {/* 필터 — 보조 칩 */}
       <div className="mb-4">
-        <ScrollTabs
-          tabs={FILTERS}
-          activeId={filter}
-          onChange={(id) => setFilter(id)}
-          ariaLabel="종목 필터"
-        />
+        <ScrollTabs tabs={FILTERS} activeId={filter} onChange={setFilter} ariaLabel="종목 필터" />
       </div>
 
-      {/* 고정 높이 영역 — 로딩 시 레이아웃 유지 */}
+      {/* 고정 높이 영역 */}
       <div className="min-h-[420px]">
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-[420px]">
             <Spin />
           </div>
-        ) : error ? (
-          <ErrorBlock
-            message={error}
-            onRetry={() => setRetryCount((c) => c + 1)}
-          />
+        ) : error && !data ? (
+          <ErrorBlock message={parseError(error)} onRetry={refetch} />
         ) : (
           <>
             <div className="flex items-center gap-2 px-2 pb-2 border-b border-gray-700 text-xs text-gray-500">
@@ -160,19 +122,15 @@ export default function StockRanking() {
                 >
                   {/* 1행: 순위 + 종목명 + 등락률 */}
                   <div className="flex items-center gap-2">
-                    <span className="w-8 shrink-0 text-gray-500 text-xs tabular-nums">
-                      {stock.rank}
-                    </span>
+                    <span className="w-8 shrink-0 text-gray-500 text-xs tabular-nums">{stock.rank}</span>
                     <p className="flex-1 text-sm font-medium">{stock.name}</p>
                     <span className="shrink-0 text-sm">
                       <ChangeRate value={stock.change_rate} />
                     </span>
                   </div>
-                  {/* 2행: 현재가 (w-8 + gap-2 = pl-10) */}
+                  {/* 2행: 현재가 */}
                   <div className="pl-10 mt-0.5">
-                    <p className="text-[11px] text-gray-500 tabular-nums">
-                      {formatPrice(stock)}
-                    </p>
+                    <p className="text-[11px] text-gray-500 tabular-nums">{formatPrice(stock)}</p>
                   </div>
                 </div>
               ))}
@@ -191,5 +149,3 @@ export default function StockRanking() {
     </div>
   );
 }
-
-

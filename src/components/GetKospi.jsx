@@ -1,6 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -36,26 +35,17 @@ function IndexBlock({ label, data }) {
 }
 
 export default function GetKospi() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
-
-  useEffect(() => {
-    setData(null);
-    setError("");
-    axiosInstance
-      .get("/kospi")
-      .then((res) => setData(res.data))
-      .catch((err) => setError(parseError(err)));
-  }, [retryCount]);
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.kospi(),
+    queryFn:  fetchers.kospi,
+  });
 
   return (
     <Card title="국내 증시" subtitle="KOSPI · KOSDAQ 지수" icon={TrendingUpIcon}>
       <div className="min-h-[120px] flex flex-col justify-center">
-        {error ? (
-          <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
-        ) : !data ? (
+        {error && !data ? (
+          <ErrorBlock message={parseError(error)} onRetry={refetch} />
+        ) : isLoading ? (
           <Spin />
         ) : (
           <div className="grid grid-cols-2 divide-x divide-gray-700">
@@ -67,5 +57,3 @@ export default function GetKospi() {
     </Card>
   );
 }
-
-

@@ -1,5 +1,6 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import {
   motion,
   useSpring,
@@ -7,7 +8,7 @@ import {
   useTransform,
   animate,
 } from "framer-motion";
-import axiosInstance from "../lib/axiosInstance";
+const MotionDiv = motion.div;
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -41,48 +42,39 @@ function getScoreMeta(score) {
 const SUBTITLE = "FGI · RSI · MA200 · HYG 기반 종합 점수";
 
 export default function GetVixFgiScore() {
-  const [error, setError]               = useState("");
-  const [loading, setLoading]           = useState(true);
-  const [retryCount, setRetryCount]     = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
-  const [displayScore, setDisplayScore] = useState("0.0");
-  const [score, setScore]               = useState(0);
-  const [meta, setMeta]                 = useState(null);
-  const [fgi, setFgi]                   = useState(null);
-  const [detail, setDetail]             = useState(null);
+  const scoreQ = useQuery({ queryKey: Q.score(), queryFn: fetchers.score });
+  const fgiQ   = useQuery({ queryKey: Q.fgi(),   queryFn: fetchers.fgi   });
 
+  const isLoading = scoreQ.isLoading || fgiQ.isLoading;
+  const error     = scoreQ.error || fgiQ.error;
+
+  // framer-motion animation
   const scoreMotion = useMotionValue(0);
   const smoothScore = useSpring(scoreMotion, { stiffness: 70, damping: 20 });
   const smoothWidth = useTransform(smoothScore, (v) => `${Math.min(v, 100)}%`);
+  const [displayScore, setDisplayScore] = useState("0.0");
+
+  const scoreData = scoreQ.data;
+  const target    = scoreData?.score ?? 0;
 
   useEffect(() => {
-    setLoading(true);
-    setError("");
-    Promise.all([
-      axiosInstance.get("/score"),
-      axiosInstance.get("/fgi"),
-    ])
-      .then(([scoreRes, fgiRes]) => {
-        const target = scoreRes?.data?.score || 0;
-        animate(scoreMotion, target, { duration: 1, ease: [0.22, 1, 0.36, 1] });
-        setScore(target);
-        setMeta(getScoreMeta(target));
-        setDetail(scoreRes.data);
-        setFgi(fgiRes.data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(parseError(err));
-        setLoading(false);
-      });
-  }, [scoreMotion, retryCount]);
+    if (scoreData) {
+      animate(scoreMotion, target, { duration: 1, ease: [0.22, 1, 0.36, 1] });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
 
   useEffect(() => {
     const unsub = smoothScore.on("change", (v) => setDisplayScore(v.toFixed(1)));
     return () => unsub();
   }, [smoothScore]);
 
-  if (loading) {
+  const score  = target;
+  const meta   = scoreData ? getScoreMeta(score) : null;
+  const detail = scoreData ?? null;
+  const fgi    = fgiQ.data ?? null;
+
+  if (isLoading) {
     return (
       <Card title="지금 투자 타이밍인가요?" subtitle={SUBTITLE} icon={BoltIcon}>
         <Spin />
@@ -90,10 +82,10 @@ export default function GetVixFgiScore() {
     );
   }
 
-  if (error) {
+  if (error && !scoreData) {
     return (
       <Card title="지금 투자 타이밍인가요?" subtitle={SUBTITLE} icon={BoltIcon}>
-        <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
+        <ErrorBlock message={parseError(error)} onRetry={() => { scoreQ.refetch(); fgiQ.refetch(); }} />
       </Card>
     );
   }
@@ -101,10 +93,7 @@ export default function GetVixFgiScore() {
   const fgiDesc  = fgi?.description?.toLowerCase() ?? "";
   const fgiLabel = FGI_LABEL[fgiDesc] ?? { ko: fgiDesc, color: "text-gray-300" };
 
-  const rsiColor = detail?.rsi < 30 ? "text-green-400"
-    : detail?.rsi > 70 ? "text-red-400"
-    : "text-gray-300";
-
+  const rsiColor   = detail?.rsi < 30 ? "text-green-400" : detail?.rsi > 70 ? "text-red-400" : "text-gray-300";
   const ma200Color = detail?.ma200_pct >= 0 ? "text-red-400" : "text-blue-400";
 
   return (
@@ -116,7 +105,7 @@ export default function GetVixFgiScore() {
       </div>
 
       <div className="w-full h-5 rounded-full bg-gray-700 overflow-hidden">
-        <motion.div
+        <MotionDiv
           className="h-full rounded-full"
           style={{
             width: smoothWidth,
@@ -195,4 +184,3 @@ export default function GetVixFgiScore() {
     </Card>
   );
 }
-

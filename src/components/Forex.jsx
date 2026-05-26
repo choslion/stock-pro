@@ -1,6 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
@@ -12,28 +11,16 @@ function fmtTs(isoUtc) {
 }
 
 export default function Forex() {
-  const [data, setData]           = useState([]);
-  const [fetchedAt, setFetchedAt] = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.forex(),
+    queryFn:  fetchers.forex,
+  });
 
-  useEffect(() => {
-    setLoading(true);
-    setError("");
-    axiosInstance
-      .get("/forex")
-      .then((res) => {
-        setData(res.data.items ?? res.data ?? []);
-        setFetchedAt(res.data.fetched_at ?? null);
-      })
-      .catch((err) => setError(parseError(err)))
-      .finally(() => setLoading(false));
-  }, [retryCount]);
+  const items     = data?.items ?? data ?? [];
+  const fetchedAt = data?.fetched_at ?? null;
 
-  if (loading) return <div className="flex justify-center py-10"><Spin /></div>;
-  if (error)   return <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
+  if (isLoading) return <div className="flex justify-center py-10"><Spin /></div>;
+  if (error && !data) return <ErrorBlock message={parseError(error)} onRetry={refetch} />;
 
   return (
     <div>
@@ -46,7 +33,7 @@ export default function Forex() {
         <span className="col-span-4 text-right">등락률</span>
       </div>
       <div className="divide-y divide-gray-700/50">
-        {data.map((item) => {
+        {items.map((item) => {
           const isPositive = item.change_pct > 0;
           const isNeutral  = item.change_pct === 0;
           const color = isNeutral ? "text-gray-400" : isPositive ? "text-red-400" : "text-blue-400";
@@ -76,5 +63,3 @@ export default function Forex() {
     </div>
   );
 }
-
-

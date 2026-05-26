@@ -1,6 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -13,33 +12,20 @@ const formatDate = (dateStr) =>
   });
 
 export default function GetSp500() {
-  const [data, setData]           = useState(null);
-  const [error, setError]         = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.sp500(),
+    queryFn:  fetchers.sp500,
+  });
 
-  useEffect(() => {
-    setData(null);
-    setError("");
-    axiosInstance
-      .get("/sp500")
-      .then((res) => {
-        const json = res.data;
-        if (!json || !json.date) throw new Error("데이터 형식 오류");
-        setData(json);
-      })
-      .catch((err) => setError(parseError(err)));
-  }, [retryCount]);
-
-  const isPositive = data ? data.deviation_percent >= 0 : false;
+  const isPositive    = data ? data.deviation_percent >= 0 : false;
   const deviationColor = isPositive ? "text-green-400" : "text-red-400";
 
   return (
     <Card title="미국 증시 현황" subtitle="S&P 500 지수" icon={TrendingUpIcon}>
       <div className="min-h-[200px] flex flex-col justify-center">
-        {error ? (
-          <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
-        ) : !data ? (
+        {error && !data ? (
+          <ErrorBlock message={parseError(error)} onRetry={refetch} />
+        ) : isLoading ? (
           <Spin />
         ) : (
           <>
@@ -74,5 +60,3 @@ export default function GetSp500() {
     </Card>
   );
 }
-
-

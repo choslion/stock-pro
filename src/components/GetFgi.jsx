@@ -1,6 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import SummaryBanner from "./ui/SummaryBanner";
@@ -29,35 +28,21 @@ const BANNER_MAP = {
 };
 
 export default function GetFgi() {
-  const [data, setData]           = useState(null);
-  const [error, setError]         = useState("");
-  const [retryCount, setRetryCount] = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: Q.fgi(),
+    queryFn:  fetchers.fgi,
+  });
 
-  useEffect(() => {
-    setData(null);
-    setError("");
-    axiosInstance
-      .get("/fgi")
-      .then((res) => {
-        const json = res.data;
-        if (!json || !json.last_update || !json.description)
-          throw new Error("데이터 형식 오류");
-        setData(json);
-      })
-      .catch((err) => setError(parseError(err)));
-  }, [retryCount]);
-
-  const desc = data?.description?.toLowerCase() ?? "";
-  const label = LABEL_MAP[desc] ?? { ko: data?.description ?? "", color: "text-yellow-300" };
+  const desc   = data?.description?.toLowerCase() ?? "";
+  const label  = LABEL_MAP[desc] ?? { ko: data?.description ?? "", color: "text-yellow-300" };
   const banner = BANNER_MAP[desc] ?? { text: "관망을 추천합니다", type: "neutral" };
 
   return (
     <Card title="시장 심리 지수" subtitle="CNN Fear & Greed Index" icon={ActivityIcon}>
       <div className="min-h-[220px] flex flex-col justify-center">
-        {error ? (
-          <ErrorBlock message={error} onRetry={() => setRetryCount((c) => c + 1)} />
-        ) : !data ? (
+        {error && !data ? (
+          <ErrorBlock message={parseError(error)} onRetry={refetch} />
+        ) : isLoading ? (
           <Spin />
         ) : (
           <>
@@ -77,5 +62,3 @@ export default function GetFgi() {
     </Card>
   );
 }
-
-

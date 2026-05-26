@@ -1,6 +1,6 @@
-﻿import { useEffect, useState } from "react";
-import useAutoRefresh from "../hooks/useAutoRefresh";
-import axiosInstance from "../lib/axiosInstance";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Q, fetchers } from "../lib/queries";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -30,64 +30,34 @@ function SectionHeader({ children }) {
 
 export default function ThemeSectors() {
   const [themeId, setThemeId]     = useState(THEMES[0].id);
-  const [krMap, setKrMap]               = useState({});
-  const [usStocks, setUsStocks]         = useState([]);
-  const [usdKrw, setUsdKrw]             = useState(null);
-  const [currency, setCurrency]         = useState("krw");
-  const [fetchedAt, setFetchedAt]       = useState(null);
-  const [krLoading, setKrLoading]       = useState(true);
-  const [usLoading, setUsLoading]       = useState(true);
-  const [krError, setKrError]           = useState("");
-  const [usError, setUsError]           = useState("");
-  const [retryCount, setRetryCount]     = useState(0);
-  useAutoRefresh(() => setRetryCount((c) => c + 1));
+  const [currency, setCurrency]   = useState("krw");
 
   const theme = THEMES.find((t) => t.id === themeId) ?? THEMES[0];
 
-  useEffect(() => {
-    setKrMap({});
-    setUsStocks([]);
-    setKrError("");
-    setUsError("");
-    setFetchedAt(null);
+  // KR query key needs the actual tickers so each theme is cached separately
+  const krTickers = useMemo(() => theme.kr_stocks.map((s) => s.ticker).join(","), [theme]);
+  const usTickers = useMemo(() => theme.us_candidates.map((s) => s.ticker).join(","), [theme]);
 
-    // 국내 — 고정 watchlist
-    if (theme.kr_stocks.length > 0) {
-      setKrLoading(true);
-      axiosInstance
-        .get("/watchlist", { params: { kr: theme.kr_stocks.map((s) => s.ticker).join(",") } })
-        .then((res) => {
-          const map = {};
-          for (const item of res.data.items ?? []) map[item.ticker] = item;
-          setKrMap(map);
-        })
-        .catch((err) => setKrError(parseError(err)))
-        .finally(() => setKrLoading(false));
-    } else {
-      setKrLoading(false);
-    }
+  const krQ = useQuery({
+    queryKey: Q.themeKr(themeId),
+    queryFn:  () => fetchers.themeKr(krTickers),
+    enabled:  theme.kr_stocks.length > 0,
+  });
+  const usQ = useQuery({
+    queryKey: Q.themeUs(themeId),
+    queryFn:  () => fetchers.themeUs(usTickers, 10),
+    enabled:  theme.us_candidates.length > 0,
+  });
 
-    // 해외 — /theme-ranking (1시간 캐시, 펀더멘털 포함)
-    if (theme.us_candidates.length > 0) {
-      setUsLoading(true);
-      axiosInstance
-        .get("/theme-ranking", {
-          params: {
-            tickers: theme.us_candidates.map((s) => s.ticker).join(","),
-            limit: 10,
-          },
-        })
-        .then((res) => {
-          setUsStocks(res.data.stocks ?? []);
-          setUsdKrw(res.data.usd_krw ?? null);
-          setFetchedAt(new Date());
-        })
-        .catch((err) => setUsError(parseError(err)))
-        .finally(() => setUsLoading(false));
-    } else {
-      setUsLoading(false);
-    }
-  }, [themeId, retryCount]);
+  const krMap = useMemo(() => {
+    const map = {};
+    for (const item of krQ.data?.items ?? []) map[item.ticker] = item;
+    return map;
+  }, [krQ.data]);
+
+  const usStocks  = usQ.data?.stocks ?? [];
+  const usdKrw    = usQ.data?.usd_krw ?? null;
+  const fetchedAt = usQ.dataUpdatedAt ? new Date(usQ.dataUpdatedAt) : null;
 
   const usNameMap = Object.fromEntries(theme.us_candidates.map((s) => [s.ticker, s.name]));
 
@@ -98,13 +68,12 @@ export default function ThemeSectors() {
 
   function fmtUsPrice(stock) {
     if (!stock) return "-";
-    if (currency === "usd") {
+    if (currency === "usd")
       return "$" + (stock.price_usd ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
     return (stock.price_krw ?? 0).toLocaleString("ko-KR") + "원";
   }
 
-  const isLoading = krLoading || usLoading;
+  const isLoading = krQ.isLoading || usQ.isLoading;
 
   return (
     <Card title="분야별 동향" subtitle="테마별 주요 종목 현황" icon={GridIcon}>
@@ -118,11 +87,11 @@ export default function ThemeSectors() {
         {/* 1줄: 해외 평균 (좌) + 원/달러 토글 (우) */}
         <div className="flex items-center justify-between">
           <span className={`text-sm font-semibold ${
-            !usLoading && usAvg !== null
+            !usQ.isLoading && usAvg !== null
               ? usAvg > 0 ? "text-red-400" : usAvg < 0 ? "text-blue-400" : "text-gray-400"
               : "text-transparent"
           }`}>
-            {!usLoading && usAvg !== null
+            {!usQ.isLoading && usAvg !== null
               ? `해외 평균 ${usAvg > 0 ? "+" : ""}${usAvg.toFixed(2)}%`
               : "·"}
           </span>
@@ -152,7 +121,7 @@ export default function ThemeSectors() {
         </div>
       </div>
 
-      {/* 컬럼 헤더 — col-span-2/4 로 첫 컬럼 여유 확보 */}
+      {/* 컬럼 헤더 */}
       <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
         <span className="col-span-2 whitespace-nowrap">구분</span>
         <span className="col-span-4">종목명</span>
@@ -170,10 +139,10 @@ export default function ThemeSectors() {
                 국내
               </span>
             </SectionHeader>
-            {krLoading ? (
+            {krQ.isLoading ? (
               <div className="flex justify-center py-4"><Spin /></div>
-            ) : krError ? (
-              <ErrorBlock message={krError} onRetry={() => setRetryCount((c) => c + 1)} />
+            ) : krQ.error && !krQ.data ? (
+              <ErrorBlock message={parseError(krQ.error)} onRetry={krQ.refetch} />
             ) : (
               <div className="divide-y divide-gray-700/50">
                 {theme.kr_stocks.map((config) => {
@@ -202,11 +171,16 @@ export default function ThemeSectors() {
         {/* 해외 섹션 */}
         {theme.us_candidates.length > 0 && (
           <>
-            <SectionHeader><span className="inline-flex items-center gap-1.5"><span className="bg-yellow-900/60 text-yellow-300 text-[10px] font-bold px-1.5 py-0.5 rounded">US</span>해외 — 자동 선별 상위 10 (시가총액·매출성장·거래량·변동성·R&D)</span></SectionHeader>
-            {usLoading ? (
+            <SectionHeader>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="bg-yellow-900/60 text-yellow-300 text-[10px] font-bold px-1.5 py-0.5 rounded">US</span>
+                해외 — 자동 선별 상위 10 (시가총액·매출성장·거래량·변동성·R&amp;D)
+              </span>
+            </SectionHeader>
+            {usQ.isLoading ? (
               <div className="flex justify-center py-6"><Spin /></div>
-            ) : usError ? (
-              <ErrorBlock message={usError} onRetry={() => setRetryCount((c) => c + 1)} />
+            ) : usQ.error && !usQ.data ? (
+              <ErrorBlock message={parseError(usQ.error)} onRetry={usQ.refetch} />
             ) : (
               <div className="divide-y divide-gray-700/50">
                 {usStocks.map((stock) => (
@@ -239,4 +213,3 @@ export default function ThemeSectors() {
     </Card>
   );
 }
-
