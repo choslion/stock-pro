@@ -126,11 +126,10 @@ export default function Watchlist() {
           />
         ) : (
           <>
-            <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
-              <span className="col-span-2 whitespace-nowrap">구분</span>
-              <span className="col-span-4">종목명</span>
-              <span className="col-span-3 text-right">현재가</span>
-              <span className="col-span-3 text-right">등락률</span>
+            <div className="flex items-center gap-2 px-2 pb-2 border-b border-gray-700 text-xs text-gray-500">
+              <span className="w-8 shrink-0">구분</span>
+              <span className="flex-1">종목명</span>
+              <span className="shrink-0">등락률</span>
             </div>
             <div className="divide-y divide-gray-700/50">
               {WATCHLIST.map((config) => {
@@ -138,22 +137,24 @@ export default function Watchlist() {
                 return (
                   <div
                     key={config.ticker}
-                    className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
+                    className="px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
                   >
-                    <span
-                      className={`col-span-2 text-xs font-semibold ${config.market === "KR" ? "text-blue-400" : "text-yellow-400"}`}
-                    >
-                      {config.market}
-                    </span>
-                    <span className="col-span-4 text-sm font-medium truncate pr-2">
-                      {config.name}
-                    </span>
-                    <span className="col-span-3 text-right text-sm text-gray-300">
-                      {formatPrice(config, stock)}
-                    </span>
-                    <span className="col-span-3 text-right text-sm">
-                      <ChangeRate value={stock?.change_rate ?? 0} />
-                    </span>
+                    {/* 1행: 구분 + 종목명 + 등락률 */}
+                    <div className="flex items-center gap-2">
+                      <span className={`w-8 shrink-0 text-xs font-semibold ${config.market === "KR" ? "text-blue-400" : "text-yellow-400"}`}>
+                        {config.market}
+                      </span>
+                      <p className="flex-1 text-sm font-medium">{config.name}</p>
+                      <span className="shrink-0 text-sm">
+                        <ChangeRate value={stock?.change_rate ?? 0} />
+                      </span>
+                    </div>
+                    {/* 2행: 현재가 */}
+                    <div className="pl-10 mt-0.5">
+                      <p className="text-[11px] text-gray-500 tabular-nums">
+                        {formatPrice(config, stock)}
+                      </p>
+                    </div>
                   </div>
                 );
               })}
