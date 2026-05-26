@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 const MotionDiv = motion.div;
 import MarketDashboard from "./MarketDashboard";
 import MarketTrends from "./MarketTrends";
@@ -8,6 +9,17 @@ import ThemeSectors from "./ThemeSectors";
 import HelpGuide from "./HelpGuide";
 import SearchModal from "./SearchModal";
 import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon } from "./ui/Icons";
+import { Q, fetchers } from "../lib/queries";
+import { THEMES } from "../config/themes";
+import { WATCHLIST } from "../config/watchlist";
+
+const _KR_LIST    = WATCHLIST.filter((w) => w.market === "KR");
+const _KR_TICKERS = _KR_LIST.map((w) => w.ticker);
+const _KR_NAMES   = _KR_LIST.map((w) => w.name);
+const _US_TICKERS = WATCHLIST.filter((w) => w.market === "US").map((w) => w.ticker);
+const _WL_PARAMS  = {};
+if (_KR_TICKERS.length) { _WL_PARAMS.kr = _KR_TICKERS.join(","); _WL_PARAMS.kr_names = _KR_NAMES.join(","); }
+if (_US_TICKERS.length) _WL_PARAMS.us = _US_TICKERS.join(",");
 
 const NAV_TABS = [
   { id: "market",    label: "시장",   icon: ChartBarIcon   },
@@ -41,6 +53,36 @@ function SectionContent({ activeTab }) {
 export default function StockIndexDashboard() {
   const [activeTab, setActiveTab]     = useState("market");
   const [showSearch, setShowSearch]   = useState(false);
+  const queryClient = useQueryClient();
+
+  // 백그라운드 프리패치 — 앱 로드 1.5초 후 모든 탭 데이터를 미리 수신
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // 시장 탭
+      queryClient.prefetchQuery({ queryKey: Q.kospi(),       queryFn: fetchers.kospi       });
+      queryClient.prefetchQuery({ queryKey: Q.krScore(),     queryFn: fetchers.krScore     });
+      queryClient.prefetchQuery({ queryKey: Q.sectors(),     queryFn: fetchers.sectors     });
+      queryClient.prefetchQuery({ queryKey: Q.usIndices(),   queryFn: fetchers.usIndices   });
+      queryClient.prefetchQuery({ queryKey: Q.score(),       queryFn: fetchers.score       });
+      queryClient.prefetchQuery({ queryKey: Q.fgi(),         queryFn: fetchers.fgi         });
+      queryClient.prefetchQuery({ queryKey: Q.usSectors(),   queryFn: fetchers.usSectors   });
+      // 차트 탭
+      queryClient.prefetchQuery({ queryKey: Q.investorTrends(), queryFn: fetchers.investorTrends });
+      queryClient.prefetchQuery({ queryKey: Q.commodities(), queryFn: fetchers.commodities });
+      queryClient.prefetchQuery({ queryKey: Q.forex(),       queryFn: fetchers.forex       });
+      queryClient.prefetchQuery({ queryKey: Q.ranking("domestic", "amount"), queryFn: () => fetchers.ranking("domestic", "amount") });
+      queryClient.prefetchQuery({ queryKey: Q.etf("kr", "popular"),          queryFn: () => fetchers.etf("kr", "popular")          });
+      // 테마 탭 (첫 번째 테마)
+      const t0 = THEMES[0];
+      if (t0.kr_stocks.length)     queryClient.prefetchQuery({ queryKey: Q.themeKr(t0.id), queryFn: () => fetchers.themeKr(t0.kr_stocks.map((s) => s.ticker).join(",")) });
+      if (t0.us_candidates.length) queryClient.prefetchQuery({ queryKey: Q.themeUs(t0.id), queryFn: () => fetchers.themeUs(t0.us_candidates.map((s) => s.ticker).join(","), 10) });
+      // 관심 탭
+      if (Object.keys(_WL_PARAMS).length > 0) {
+        queryClient.prefetchQuery({ queryKey: Q.watchlist(_KR_TICKERS.join(","), _US_TICKERS.join(",")), queryFn: () => fetchers.watchlist(_WL_PARAMS) });
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [queryClient]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
