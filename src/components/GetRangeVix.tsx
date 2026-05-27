@@ -1,0 +1,112 @@
+import { useEffect, useState } from "react";
+import axiosInstance from "../lib/axiosInstance";
+import Card from "./ui/Card";
+import Spin from "./ui/Spin";
+import ErrorBlock from "./ui/ErrorBlock";
+import parseError from "../lib/parseError";
+import { ChartBarIcon } from "./ui/Icons";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+interface VixPoint {
+  date:  string;
+  value: number;
+}
+
+export default function VixChart() {
+  const today        = new Date().toISOString().slice(0, 10);
+  const defaultStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [endDate, setEndDate]     = useState(today);
+  const [data, setData]           = useState<VixPoint[]>([]);
+  const [error, setError]         = useState("");
+
+  useEffect(() => {
+    setError("");
+    axiosInstance
+      .get<VixPoint[]>("/vix/range", { params: { start_date: startDate, end_date: endDate } })
+      .then((res) =>
+        setData(res.data.map((d) => ({ date: d.date, value: parseFloat(String(d.value)) })))
+      )
+      .catch((err) => setError(parseError(err)));
+  }, [startDate, endDate]);
+
+  return (
+    <Card title="변동성 변화 추이" subtitle="CBOE Volatility Index (VIX) 기간별 추이" icon={ChartBarIcon}>
+      {/* 날짜 선택 필드 */}
+      <div className="flex flex-col sm:flex-row sm:justify-end gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <label htmlFor="start-date" className="text-sm text-gray-300">
+            시작일:
+          </label>
+          <input
+            id="start-date"
+            type="date"
+            className="bg-gray-800 text-white border px-2 py-1 rounded"
+            value={startDate}
+            max={endDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="end-date" className="text-sm text-gray-300">
+            종료일:
+          </label>
+          <input
+            id="end-date"
+            type="date"
+            className="bg-gray-800 text-white border px-2 py-1 rounded"
+            value={endDate}
+            min={startDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* 에러 메시지 */}
+      {error && <ErrorBlock message={error} />}
+
+      {/* 차트 렌더링 */}
+      <div className="h-80 sm:h-96">
+        {data.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={data}
+              margin={{ top: 10, right: 20, bottom: 10, left: 0 }}
+            >
+              <XAxis dataKey="date" stroke="#ccc" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#ccc" tick={{ fontSize: 12 }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1f2937",
+                  borderRadius: 8,
+                }}
+                labelStyle={{ color: "#93c5fd" }}
+                itemStyle={{ color: "#fff" }}
+              />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#60a5fa"
+                strokeWidth={3}
+                dot={{ r: 2 }}
+                activeDot={{ r: 5 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <Spin />
+        )}
+      </div>
+    </Card>
+  );
+}
