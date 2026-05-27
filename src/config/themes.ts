@@ -1,0 +1,172 @@
+export interface ThemeStock {
+  ticker: string;
+  name:   string;
+}
+
+export interface Theme {
+  id:            string;
+  label:         string;
+  emoji:         string;
+  kr_stocks:     ThemeStock[];
+  us_candidates: ThemeStock[];
+}
+
+// 분야별 테마 설정
+// - kr_stocks : 고정 표시 (코드 확인 필요 항목은 주석 표시)
+// - us_candidates : 자동 선별 풀 — 시가총액·매출성장률·거래량·변동성·R&D 비율로 상위 10개 추출
+export const THEMES: Theme[] = [
+  {
+    id: "semiconductor", label: "반도체", emoji: "💾",
+    kr_stocks: [
+      { ticker: "005930", name: "삼성전자" },
+      { ticker: "000660", name: "SK하이닉스" },
+      { ticker: "042700", name: "한미반도체" },
+      { ticker: "000990", name: "DB하이텍" },
+      { ticker: "240810", name: "원익IPS" },
+      { ticker: "058470", name: "리노공업" },
+      { ticker: "036930", name: "주성엔지니어링" },
+    ],
+    us_candidates: [
+      { ticker: "NVDA", name: "엔비디아" }, { ticker: "AMD",  name: "AMD" },
+      { ticker: "AVGO", name: "브로드컴" }, { ticker: "MU",   name: "마이크론" },
+      { ticker: "AMAT", name: "어플라이드머티리얼즈" }, { ticker: "QCOM", name: "퀄컴" },
+      { ticker: "INTC", name: "인텔" },    { ticker: "LRCX", name: "램리서치" },
+      { ticker: "KLAC", name: "KLA" },     { ticker: "TXN",  name: "텍사스인스트루먼츠" },
+      { ticker: "MRVL", name: "마벨테크놀로지" }, { ticker: "ON",   name: "온세미컨덕터" },
+      { ticker: "NXPI", name: "NXP세미컨덕터" },  { ticker: "ADI",  name: "아나로그디바이시즈" },
+      { ticker: "ASML", name: "ASML" },    { ticker: "MCHP", name: "마이크로칩테크" },
+      { ticker: "SWKS", name: "스카이웍스" }, { ticker: "TSM", name: "TSMC" },
+    ],
+  },
+  {
+    id: "ai", label: "인공지능", emoji: "🤖",
+    kr_stocks: [
+      { ticker: "035420", name: "NAVER" },       { ticker: "035720", name: "카카오" },
+      { ticker: "304100", name: "솔트룩스" },    { ticker: "108860", name: "셀바스AI" },
+      { ticker: "402030", name: "코난테크놀로지" },
+    ],
+    us_candidates: [
+      { ticker: "NVDA",  name: "엔비디아" },     { ticker: "MSFT",  name: "마이크로소프트" },
+      { ticker: "GOOGL", name: "알파벳" },        { ticker: "META",  name: "메타" },
+      { ticker: "AMZN",  name: "아마존" },        { ticker: "ORCL",  name: "오라클" },
+      { ticker: "PLTR",  name: "팔란티어" },      { ticker: "IBM",   name: "IBM" },
+      { ticker: "ADBE",  name: "어도비" },        { ticker: "CRM",   name: "세일즈포스" },
+      { ticker: "DDOG",  name: "데이터독" },      { ticker: "SNOW",  name: "스노우플레이크" },
+      { ticker: "AI",    name: "C3.ai" },         { ticker: "ANSS",  name: "앤시스" },
+      { ticker: "SNPS",  name: "시놉시스" },      { ticker: "CDNS",  name: "케이던스" },
+    ],
+  },
+  {
+    id: "datacenter", label: "전기/데이터센터", emoji: "⚡",
+    kr_stocks: [
+      { ticker: "015760", name: "한국전력" },    { ticker: "010120", name: "LS일렉트릭" },
+      { ticker: "267260", name: "HD현대일렉트릭" }, { ticker: "298040", name: "효성중공업" },
+      { ticker: "006260", name: "LS" },           { ticker: "033100", name: "제룡전기" },
+    ],
+    us_candidates: [
+      { ticker: "EQIX", name: "에퀴닉스" },  { ticker: "DLR",  name: "디지털리얼티" },
+      { ticker: "VST",  name: "바이스트라" }, { ticker: "ETN",  name: "이튼" },
+      { ticker: "PWR",  name: "퀀타서비스" }, { ticker: "AMT",  name: "아메리칸타워" },
+      { ticker: "NRG",  name: "NRG에너지" },  { ticker: "CEG",  name: "컨스텔레이션에너지" },
+      { ticker: "GEV",  name: "GE버노바" },   { ticker: "HUBB", name: "허벨" },
+      { ticker: "EMR",  name: "에머슨일렉트릭" }, { ticker: "ROK", name: "로크웰오토메이션" },
+      { ticker: "CARR", name: "캐리어글로벌" }, { ticker: "CMS", name: "CMS에너지" },
+    ],
+  },
+  {
+    id: "security", label: "보안", emoji: "🛡️",
+    kr_stocks: [
+      { ticker: "053800", name: "안랩" },         { ticker: "067920", name: "이글루시큐리티" },
+      { ticker: "263860", name: "지니언스" },      { ticker: "170790", name: "파이오링크" },
+      { ticker: "051915", name: "수산아이앤티" },
+    ],
+    us_candidates: [
+      { ticker: "CRWD", name: "크라우드스트라이크" }, { ticker: "PANW", name: "팔로알토네트웍스" },
+      { ticker: "ZS",   name: "지스케일러" },         { ticker: "FTNT", name: "포티넷" },
+      { ticker: "OKTA", name: "옥타" },               { ticker: "S",    name: "센티넬원" },
+      { ticker: "CYBR", name: "사이버아크" },          { ticker: "CHKP", name: "체크포인트" },
+      { ticker: "RPD",  name: "래피드7" },             { ticker: "QLYS", name: "퀄리스" },
+      { ticker: "VRNS", name: "바로니스" },             { ticker: "TENB", name: "테너블" },
+      { ticker: "SAIC", name: "사익" },                { ticker: "CDAY", name: "세리디언" },
+    ],
+  },
+  {
+    id: "quantum", label: "양자컴퓨터", emoji: "⚛️",
+    kr_stocks: [
+      { ticker: "017670", name: "SK텔레콤" },
+      { ticker: "030200", name: "KT" },
+      { ticker: "000660", name: "SK하이닉스" },
+    ],
+    us_candidates: [
+      { ticker: "IONQ",  name: "IonQ" },              { ticker: "RGTI",  name: "리게티컴퓨팅" },
+      { ticker: "QUBT",  name: "퀀텀컴퓨팅" },        { ticker: "QBTS",  name: "D-Wave퀀텀" },
+      { ticker: "IBM",   name: "IBM" },                { ticker: "GOOGL", name: "알파벳(Willow)" },
+      { ticker: "MSFT",  name: "마이크로소프트" },    { ticker: "ARQQ",  name: "아르킷퀀텀" },
+    ],
+  },
+  {
+    id: "finance", label: "증권", emoji: "📈",
+    kr_stocks: [
+      { ticker: "006800", name: "미래에셋증권" }, { ticker: "016360", name: "삼성증권" },
+      { ticker: "039490", name: "키움증권" },      { ticker: "071050", name: "한국금융지주" },
+      { ticker: "005940", name: "NH투자증권" },    { ticker: "008560", name: "메리츠증권" },
+    ],
+    us_candidates: [
+      { ticker: "GS",   name: "골드만삭스" },  { ticker: "MS",   name: "모건스탠리" },
+      { ticker: "BX",   name: "블랙스톤" },    { ticker: "KKR",  name: "KKR" },
+      { ticker: "SCHW", name: "찰스슈왑" },    { ticker: "IBKR", name: "인터랙티브브로커스" },
+      { ticker: "JPM",  name: "JP모건" },      { ticker: "BAC",  name: "뱅크오브아메리카" },
+      { ticker: "RJF",  name: "레이먼드제임스" }, { ticker: "SF",  name: "스티펠파이낸셜" },
+      { ticker: "EVR",  name: "에버코어" },     { ticker: "MC",   name: "모엘리스" },
+      { ticker: "PJT",  name: "PJT파트너스" },
+    ],
+  },
+  {
+    id: "space", label: "우주", emoji: "🚀",
+    kr_stocks: [
+      { ticker: "012450", name: "한화에어로스페이스" }, { ticker: "047810", name: "한국항공우주" },
+      { ticker: "079550", name: "LIG넥스원" },          { ticker: "272210", name: "한화시스템" },
+      { ticker: "005010", name: "휴니드" },
+    ],
+    us_candidates: [
+      { ticker: "RKLB", name: "로켓랩" },     { ticker: "ASTS", name: "AST스페이스모바일" },
+      { ticker: "LMT",  name: "록히드마틴" }, { ticker: "NOC",  name: "노스롭그루먼" },
+      { ticker: "RTX",  name: "RTX" },         { ticker: "BA",   name: "보잉" },
+      { ticker: "KTOS", name: "크라토스디펜스" }, { ticker: "HII", name: "헌팅턴잉걸스" },
+      { ticker: "PL",   name: "플래닛랩스" }, { ticker: "LUNR", name: "인튜이티브머신스" },
+      { ticker: "RDW",  name: "레드와이어" }, { ticker: "BWXT", name: "BWX테크놀로지스" },
+    ],
+  },
+  {
+    id: "robot", label: "로봇", emoji: "🦾",
+    kr_stocks: [
+      { ticker: "277810", name: "레인보우로보틱스" }, { ticker: "090360", name: "로보스타" },
+      { ticker: "056080", name: "유진로봇" },          { ticker: "060280", name: "큐렉소" },
+      { ticker: "215100", name: "뉴로메카" },
+    ],
+    us_candidates: [
+      { ticker: "ISRG", name: "인튜이티브서지컬" }, { ticker: "TER",  name: "테라다인" },
+      { ticker: "CGNX", name: "코그넥스" },           { ticker: "ABB",  name: "ABB" },
+      { ticker: "ROK",  name: "로크웰오토메이션" },   { ticker: "PATH", name: "UiPath" },
+      { ticker: "NVDA", name: "엔비디아" },            { ticker: "TSLA", name: "테슬라" },
+      { ticker: "HON",  name: "허니웰" },              { ticker: "AZTA", name: "아젠타" },
+      { ticker: "OMCL", name: "옴니셀" },
+    ],
+  },
+  {
+    id: "bio", label: "바이오", emoji: "🧬",
+    kr_stocks: [
+      { ticker: "207940", name: "삼성바이오로직스" }, { ticker: "068270", name: "셀트리온" },
+      { ticker: "128940", name: "한미약품" },           { ticker: "000100", name: "유한양행" },
+      { ticker: "326030", name: "SK바이오팜" },         { ticker: "006280", name: "녹십자" },
+    ],
+    us_candidates: [
+      { ticker: "LLY",  name: "일라이릴리" }, { ticker: "AMGN", name: "암젠" },
+      { ticker: "GILD", name: "길리어드" },   { ticker: "REGN", name: "리제네론" },
+      { ticker: "VRTX", name: "버텍스파마" }, { ticker: "MRNA", name: "모더나" },
+      { ticker: "BIIB", name: "바이오젠" },   { ticker: "ABBV", name: "애브비" },
+      { ticker: "BMY",  name: "브리스톨마이어스" }, { ticker: "PFE", name: "화이자" },
+      { ticker: "INCY", name: "인사이트" },   { ticker: "ALNY", name: "앨나일람" },
+    ],
+  },
+];
