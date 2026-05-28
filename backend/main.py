@@ -1523,18 +1523,19 @@ def get_news():
     if entry and now - entry["ts"] < 1800:
         return entry["data"]
 
-    # 증권/주식 전용 RSS 채널
+    # 주식·증권 전문 RSS
     FEEDS = [
-        ("https://www.yna.co.kr/rss/stock.xml",     "연합뉴스"),
-        ("https://www.hankyung.com/feed/stock",      "한국경제"),
-        ("https://www.mk.co.kr/rss/50200011/",       "매일경제"),
-        ("https://finance.yahoo.com/news/rssindex",  "Yahoo Finance"),
+        ("https://www.sedaily.com/RssService/RssMain?RssCateId=02", "서울경제"),
+        ("https://biz.chosun.com/rss/stock.xml",                    "조선비즈"),
+        ("https://www.edaily.co.kr/rss/rssData.asp?MenuItem=1",     "이데일리"),
+        ("https://finance.yahoo.com/news/rssindex",                  "Yahoo Finance"),
     ]
 
+    # 주식 핵심 키워드 — 반드시 하나 이상 포함
     STOCK_KW = [
-        "주식", "증권", "코스피", "코스닥", "나스닥", "S&P", "ETF", "주가",
-        "상장", "배당", "공모", "펀드", "매수", "매도", "투자", "종목",
-        "거래소", "선물", "지수", "장세", "강세", "약세", "시총",
+        "주가", "코스피", "코스닥", "증시", "주식", "증권",
+        "ETF", "나스닥", "S&P", "다우", "선물", "공매도",
+        "시총", "종목", "배당", "공모주", "상장", "장세",
     ]
 
     items: list[dict] = []
