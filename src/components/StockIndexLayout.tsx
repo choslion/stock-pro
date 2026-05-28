@@ -8,7 +8,6 @@ const Watchlist       = lazy(() => import("./Watchlist"));
 const ThemeSectors    = lazy(() => import("./ThemeSectors"));
 const HelpGuide       = lazy(() => import("./HelpGuide"));
 import SearchModal from "./SearchModal";
-import Spin from "./ui/Spin";
 import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { THEMES } from "../config/themes";
@@ -47,7 +46,7 @@ const TAB_ANIM = {
 
 function SectionContent({ activeTab }: { activeTab: TabId }) {
   return (
-    <Suspense fallback={<div className="flex justify-center pt-20"><Spin /></div>}>
+    <Suspense fallback={null}>
       <AnimatePresence mode="wait">
         <MotionDiv key={activeTab} {...TAB_ANIM}>
           {activeTab === "market"    && <MarketDashboard />}
