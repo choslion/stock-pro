@@ -5,6 +5,14 @@ import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
 import type { SearchResultItem } from "./SearchModal";
 
+function SparkleIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.592-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
+    </svg>
+  );
+}
+
 const PERIODS = [
   { id: "1w", label: "1주" },
   { id: "1m", label: "1달" },
@@ -40,9 +48,12 @@ interface StockChartModalProps {
 }
 
 export default function StockChartModal({ stock, onBack, onClose }: StockChartModalProps) {
-  const [period, setPeriod]   = useState<Period>("1m");
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(false);
+  const [period, setPeriod]     = useState<Period>("1m");
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(false);
+  const [aiText, setAiText]     = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiOpen, setAiOpen]     = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
@@ -116,6 +127,19 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
   const handleOverlay = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onBack();
   }, [onBack]);
+
+  const handleAiAnalysis = useCallback(() => {
+    if (aiText) { setAiOpen((v) => !v); return; }
+    setAiOpen(true);
+    setAiLoading(true);
+    axiosInstance
+      .get<{ analysis: string }>("/ai-stock-analysis", {
+        params: { ticker: stock.ticker, market: stock.market, name: stock.name },
+      })
+      .then((res) => setAiText(res.data.analysis ?? ""))
+      .catch(() => setAiText("분석 정보를 불러올 수 없습니다."))
+      .finally(() => setAiLoading(false));
+  }, [aiText, stock]);
 
   return (
     <div
@@ -192,6 +216,33 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
               {p.label}
             </button>
           ))}
+        </div>
+
+        {/* AI 분석 */}
+        <div className="px-4 pb-4">
+          <button
+            onClick={handleAiAnalysis}
+            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl
+                       bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20
+                       text-blue-300 text-xs font-medium transition-colors"
+          >
+            <SparkleIcon className="w-3.5 h-3.5" />
+            AI 종목 분석
+          </button>
+
+          {aiOpen && (
+            <div className="mt-2 rounded-xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 to-slate-900/60 px-4 py-3">
+              {aiLoading ? (
+                <div className="space-y-2">
+                  <div className="h-2.5 bg-gray-700/60 rounded-full animate-pulse w-full" />
+                  <div className="h-2.5 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
+                  <div className="h-2.5 bg-gray-700/60 rounded-full animate-pulse w-4/6" />
+                </div>
+              ) : (
+                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{aiText}</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

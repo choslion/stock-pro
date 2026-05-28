@@ -1437,6 +1437,83 @@ def get_chart(
     return {"items": data}
 
 
+@app.get("/ai-stock-analysis")
+def get_ai_stock_analysis(
+    ticker: str = Query(...),
+    market: str = Query("US"),
+    name:   str = Query(""),
+):
+    import anthropic as _anthropic
+    import datetime as _dt
+
+    cache_key = f"ai_analysis_{ticker}_{market}"
+    now = time.time()
+    entry = _cache.get(cache_key)
+    if entry and now - entry["ts"] < 1800:
+        return entry["data"]
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "ANTHROPIC_API_KEY가 설정되지 않았습니다.")
+
+    try:
+        if market == "KR":
+            end   = _dt.date.today()
+            start = end - _dt.timedelta(days=60)
+            df = fdr.DataReader(ticker, str(start), str(end))
+            if df.empty:
+                raise HTTPException(404, "데이터 없음")
+            closes  = df["Close"].dropna().tail(20)
+            current = float(closes.iloc[-1])
+            prev    = float(closes.iloc[-2])
+            high20  = float(closes.max())
+            low20   = float(closes.min())
+            price_str = f"{current:,.0f}원"
+        else:
+            hist = yf.Ticker(ticker).history(period="1mo")
+            if hist.empty:
+                raise HTTPException(404, "데이터 없음")
+            closes  = hist["Close"].dropna().tail(20)
+            current = float(closes.iloc[-1])
+            prev    = float(closes.iloc[-2])
+            high20  = float(closes.max())
+            low20   = float(closes.min())
+            price_str = f"${current:,.2f}"
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+    change_pct = (current - prev) / prev * 100
+    sign       = "+" if change_pct >= 0 else ""
+    range_pct  = (current - low20) / (high20 - low20) * 100 if high20 != low20 else 50
+
+    prompt = f"""다음 종목의 최근 주가 데이터를 분석해 간단한 참고 코멘트를 작성해주세요.
+
+종목: {name} ({ticker}, {market})
+현재가: {price_str}
+전일 대비: {sign}{change_pct:.2f}%
+최근 20일 최고가: {high20:,.2f}
+최근 20일 최저가: {low20:,.2f}
+현재가 위치: 최근 고저 범위의 {range_pct:.0f}% 수준
+
+작성 규칙:
+- 2~3문장의 간결한 한국어
+- 수치를 근거로 현재 주가 흐름과 위치를 설명
+- 투자 권유 금지, 사실 기반 서술만
+- 마지막에 "※ AI가 가격 데이터를 기반으로 자동 생성한 참고 정보입니다." 문구 추가"""
+
+    client  = _anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    result = {"analysis": message.content[0].text.strip()}
+    _cache[cache_key] = {"data": result, "ts": now}
+    return result
+
+
 @app.get("/ai-briefing")
 def get_ai_briefing():
     import anthropic as _anthropic
