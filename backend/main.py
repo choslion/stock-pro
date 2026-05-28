@@ -1154,32 +1154,79 @@ def _cached_krx_listing() -> pd.DataFrame:
     return df
 
 
+import unicodedata as _unicodedata
+import difflib as _difflib
+
+def _normalize(text: str) -> str:
+    """검색어 정규화: 소문자, 공백/기호 제거, 유니코드 NFC."""
+    text = _unicodedata.normalize("NFC", text).lower()
+    return "".join(c for c in text if c not in " -._·")
+
+# 정규화된 별칭 캐시 (서버 시작 시 1회 생성)
+_KR_ALIAS_NORMALIZED: list[tuple[str, str, str]] = [
+    (_normalize(kr_name), kr_name, ticker)
+    for kr_name, ticker in _KR_NAME_TO_TICKER.items()
+]
+
+def _search_kr_aliases(q_norm: str, limit: int = 5) -> list[tuple[str, str]]:
+    """정규화된 쿼리로 별칭 검색. 정확 포함 → 퍼지(≥85%) 순."""
+    exact:  list[tuple[float, str, str]] = []
+    fuzzy:  list[tuple[float, str, str]] = []
+
+    for norm_alias, original, ticker in _KR_ALIAS_NORMALIZED:
+        if q_norm in norm_alias:
+            exact.append((0.0, ticker, original))
+        else:
+            ratio = _difflib.SequenceMatcher(None, q_norm, norm_alias).ratio()
+            if ratio >= 0.85:
+                fuzzy.append((ratio, ticker, original))
+
+    fuzzy.sort(key=lambda x: -x[0])
+    combined = exact + fuzzy
+    seen: set[str] = set()
+    result: list[tuple[str, str]] = []
+    for _, ticker, original in combined:
+        if ticker not in seen:
+            seen.add(ticker)
+            result.append((ticker, original))
+        if len(result) >= limit:
+            break
+    return result
+
+
 @app.get("/search")
 def search_stocks(q: str = Query(...)):
     q_stripped = q.strip()
     if not q_stripped:
         return {"items": []}
 
-    cache_key = f"search_{q_stripped.lower()}"
+    q_norm    = _normalize(q_stripped)
+    cache_key = f"search_{q_norm}"
 
     def fetch():
-        results = []
-        q_lower = q_stripped.lower()
+        seen_keys: set[str] = set()
+        results: list[dict] = []
+
+        def add_result(item: dict):
+            key = f"{item['market']}:{item['ticker']}"
+            if key not in seen_keys:
+                seen_keys.add(key)
+                results.append(item)
 
         # 1. 국내 — KRX 목록에서 이름·코드 검색
         try:
-            kr_df = _cached_krx_listing()
+            kr_df    = _cached_krx_listing()
             code_col = next((c for c in ["Code", "Symbol"] if c in kr_df.columns), None)
             name_col = "Name" if "Name" in kr_df.columns else None
             if code_col and name_col:
                 mask = (
-                    kr_df[name_col].str.lower().str.contains(q_lower, na=False) |
-                    kr_df[code_col].str.lower().str.contains(q_lower, na=False)
+                    kr_df[name_col].str.lower().str.contains(q_norm, na=False) |
+                    kr_df[code_col].str.lower().str.contains(q_norm, na=False)
                 )
                 for _, row in kr_df[mask].head(5).iterrows():
                     close = row.get("Close")
                     chg   = row.get("ChgRatio")
-                    results.append({
+                    add_result({
                         "market":      "KR",
                         "ticker":      str(row.get(code_col, "")),
                         "name":        str(row.get(name_col, "")),
@@ -1189,19 +1236,14 @@ def search_stocks(q: str = Query(...)):
         except Exception:
             pass
 
-        # 2. 미국 — 한국어 이름 역방향 매핑 우선 검색
-        kr_matched_tickers: list[str] = []
-        kr_matched_names:   dict[str, str] = {}
-        for kr_name, ticker in _KR_NAME_TO_TICKER.items():
-            if q_lower in kr_name.lower():
-                kr_matched_tickers.append(ticker)
-                kr_matched_names[ticker] = kr_name
-                if len(kr_matched_tickers) >= 5:
-                    break
+        # 2. 미국 — 한국어 별칭 매핑 (정확 포함 + 퍼지)
+        kr_matches    = _search_kr_aliases(q_norm)
+        kr_matched_tickers = [t for t, _ in kr_matches]
+        kr_matched_names   = {t: n for t, n in kr_matches}
 
         # 3. 미국 — Yahoo Finance 검색 API (영문 티커·이름)
-        yf_tickers: list[str] = []
-        yf_name_map: dict[str, str] = {}
+        yf_tickers:  list[str]       = []
+        yf_name_map: dict[str, str]  = {}
         try:
             yf_search_url = "https://query1.finance.yahoo.com/v1/finance/search"
             params = {"q": q_stripped, "lang": "en-US", "region": "US",
@@ -1248,7 +1290,7 @@ def search_stocks(q: str = Query(...)):
                         chg = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2)
                 except Exception:
                     pass
-                results.append({
+                add_result({
                     "market":      "US",
                     "ticker":      ticker,
                     "name":        name_map.get(ticker, ticker),
