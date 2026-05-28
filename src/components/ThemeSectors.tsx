@@ -156,7 +156,7 @@ export default function ThemeSectors() {
                       className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
                     >
                       <span className="col-span-2 text-xs font-semibold text-blue-400">KR</span>
-                      <span className="col-span-4 text-sm font-medium truncate pr-2">{config.name}</span>
+                      <span className="col-span-4 text-sm font-medium pr-2">{config.name}</span>
                       <span className="col-span-3 text-right text-sm text-gray-300">
                         {stock ? (stock.price ?? 0).toLocaleString("ko-KR") + "원" : "-"}
                       </span>
@@ -194,7 +194,7 @@ export default function ThemeSectors() {
                     <span className="col-span-2 text-xs font-semibold text-yellow-400">
                       {stock.rank}
                     </span>
-                    <span className="col-span-4 text-sm font-medium truncate pr-2">
+                    <span className="col-span-4 text-sm font-medium pr-2">
                       {usNameMap[stock.ticker] ?? stock.ticker}
                     </span>
                     <span className="col-span-3 text-right text-sm text-gray-300">
