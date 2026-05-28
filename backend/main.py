@@ -1379,14 +1379,14 @@ def _build_market_snapshot() -> str:
     # 미국 섹터 ETF 상위/하위
     sec_entry = _cache.get("us_sectors")
     if sec_entry and sec_entry.get("data"):
-        secs = sorted(sec_entry["data"], key=lambda x: x.get("change_pct", 0), reverse=True)
+        secs = sorted(sec_entry["data"], key=lambda x: x.get("change_rate", 0), reverse=True)
         lines.append("## 미국 섹터 동향")
         for s in secs[:3]:
-            sign = "+" if s.get("change_pct", 0) >= 0 else ""
-            lines.append(f"- {s['name']} 강세: {sign}{s['change_pct']:.2f}%")
+            sign = "+" if s.get("change_rate", 0) >= 0 else ""
+            lines.append(f"- {s['name']} 강세: {sign}{s['change_rate']:.2f}%")
         for s in secs[-2:]:
-            sign = "+" if s["change_pct"] >= 0 else ""
-            lines.append(f"- {s['name']} 약세: {sign}{s['change_pct']:.2f}%")
+            sign = "+" if s["change_rate"] >= 0 else ""
+            lines.append(f"- {s['name']} 약세: {sign}{s['change_rate']:.2f}%")
 
     return "\n".join(lines) if lines else "현재 시장 데이터를 불러오는 중입니다."
 
