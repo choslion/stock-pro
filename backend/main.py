@@ -1491,20 +1491,36 @@ def get_ai_stock_analysis(
     sign       = "+" if change_pct >= 0 else ""
     range_pct  = (current - low20) / (high20 - low20) * 100 if high20 != low20 else 50
 
-    prompt = f"""다음 종목의 최근 주가 데이터를 분석해 간단한 참고 코멘트를 작성해주세요.
+    if range_pct >= 70:
+        range_desc = "최근 20일 범위의 상단 근처"
+    elif range_pct <= 30:
+        range_desc = "최근 20일 범위의 하단 근처"
+    else:
+        range_desc = "최근 20일 범위의 중간대"
 
-종목: {name} ({ticker}, {market})
-현재가: {price_str}
-전일 대비: {sign}{change_pct:.2f}%
-최근 20일 최고가: {high20:,.2f}
-최근 20일 최저가: {low20:,.2f}
-현재가 위치: 최근 고저 범위의 {range_pct:.0f}% 수준
+    prompt = f"""You are a stock data commentator. Write a short Korean comment based solely on the price data below.
 
-작성 규칙:
-- 2~3문장의 간결한 한국어
-- 수치를 근거로 현재 주가 흐름과 위치를 설명
-- 투자 권유 금지, 사실 기반 서술만
-- 마지막에 "※ AI가 가격 데이터를 기반으로 자동 생성한 참고 정보입니다." 문구 추가"""
+Stock: {name} ({ticker}, {market})
+Current price: {price_str}
+Daily change: {sign}{change_pct:.2f}%
+20-day high: {high20:,.2f}
+20-day low: {low20:,.2f}
+Position in 20-day range: {range_pct:.0f}% ({range_desc})
+
+Rules:
+- Output must be in Korean
+- 2-3 sentences, concise
+- Base the comment only on the provided price data above
+- Describe the current price movement and its position within the 20-day range
+- Do not infer or mention reasons for price movement
+- Do not mention moving averages, trading volume, news, earnings, disclosures, supply/demand, or industry trends
+- Do not use technical analysis expressions such as "trend reversal", "resistance breakout", "support confirmed", or "buying pressure"
+- Forbidden: investment advice, buy/sell/hold opinions, price targets, return forecasts
+- Forbidden: expressions like "buying opportunity", "entry point", "attractive", "rebound expected", "further upside"
+- Do not predict future price direction
+- If data is abnormal or insufficient, output a cautious message only
+- Forbidden: emojis, markdown symbols (**, ##); plain text only
+- End with this exact sentence: "※ AI가 가격 데이터를 기반으로 자동 생성한 참고 정보입니다."""
 
     client  = _anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
@@ -1593,17 +1609,28 @@ def get_ai_briefing():
     snapshot = _build_market_snapshot()
     today = datetime.utcnow().strftime("%Y년 %m월 %d일")
 
-    prompt = f"""당신은 전문 주식 시황 분석가입니다. 아래 {today} 기준 시장 데이터를 바탕으로 한국 투자자를 위한 시황 브리핑을 작성하세요.
+    prompt = f"""You are a professional stock market analyst. Write a Korean market briefing for Korean investors based on the data below ({today}).
 
 {snapshot}
 
-작성 규칙:
-- 200~250자 내외의 간결한 한국어 문단 1개
-- 수치를 근거로 시장 흐름의 핵심 포인트 2~3개 언급
-- 투자 권유는 금지, 사실 기반 서술만
-- 딱딱하지 않고 읽기 쉬운 어조
-- 이모지, **, ## 같은 마크다운 기호 절대 사용 금지, 순수 텍스트만
-- 마지막에 "※ AI가 시장 데이터를 분석하여 자동 생성된 브리핑입니다." 문구 추가"""
+Rules:
+- Output must be in Korean
+- Body: one Korean paragraph, 180-230 characters (disclaimer excluded from count)
+- End with this exact sentence on a new line: "※ AI가 시장 데이터를 분석하여 자동 생성된 브리핑입니다."
+- Use only figures present in the snapshot; never estimate or fabricate price, change rate, volume, news, or disclosures
+- Highlight only the 2-3 most important market trends
+- Prioritize items most relevant to Korean investors: domestic indices, US indices, FX rates, oil, commodities
+- Connect figures into a coherent market narrative; do not list unrelated numbers
+- If indicators conflict, use balanced terms like "혼조", "제한적", "엇갈림" instead of asserting a single direction
+- If movement is small or directionless, say "뚜렷한 방향성은 제한적"
+- If it is unclear whether data is intraday or closing, use "제공된 데이터 기준"
+- Only use "마감", "장 초반", "장중" if the snapshot explicitly includes that context
+- Forbidden: investment advice, stock recommendations, buy/sell/hold judgments, price targets, return forecasts
+- Forbidden: expressions like "기회", "매력적", "사야 한다", "비중 확대"
+- Forbidden: guaranteed returns, principal guarantees, definitive up/down predictions
+- Tone: natural and easy to read, not stiff
+- Forbidden: markdown symbols (**, ##, emojis); plain text only, minimize line breaks
+- If snapshot data is insufficient, output only: "제공된 시장 데이터가 부족해 시황 판단이 어렵습니다."""
 
     client = _anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
