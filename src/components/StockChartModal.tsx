@@ -79,7 +79,7 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
       grid:        { vertLines: { color: "#1f2937" }, horzLines: { color: "#1f2937" } },
       crosshair:   { mode: 1 },
       rightPriceScale: { borderColor: "#374151" },
-      timeScale:   { borderColor: "#374151", timeVisible: true },
+      timeScale:   { borderColor: "#374151", timeVisible: true, rightOffset: 8, barSpacing: 8, minBarSpacing: 3 },
       handleScroll: true,
       handleScale:  true,
     });
@@ -111,7 +111,12 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
         const items = res.data.items ?? [];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         seriesRef.current!.setData(items as any);
-        chartRef.current!.timeScale().fitContent();
+        const ts = chartRef.current!.timeScale();
+        ts.fitContent();
+        // 왼쪽 첫 데이터가 잘리지 않도록 스크롤 여백 보정
+        if (items.length > 0) {
+          ts.scrollToPosition(-2, false);
+        }
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
