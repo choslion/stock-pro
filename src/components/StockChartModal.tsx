@@ -111,12 +111,7 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
         const items = res.data.items ?? [];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         seriesRef.current!.setData(items as any);
-        const ts = chartRef.current!.timeScale();
-        ts.fitContent();
-        // 왼쪽 첫 데이터가 잘리지 않도록 스크롤 여백 보정
-        if (items.length > 0) {
-          ts.scrollToPosition(-2, false);
-        }
+        chartRef.current!.timeScale().fitContent();
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
