@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 const MotionDiv = motion.div;
-import MarketDashboard from "./MarketDashboard";
-import MarketTrends from "./MarketTrends";
-import Watchlist from "./Watchlist";
-import ThemeSectors from "./ThemeSectors";
-import HelpGuide from "./HelpGuide";
+const MarketDashboard = lazy(() => import("./MarketDashboard"));
+const MarketTrends    = lazy(() => import("./MarketTrends"));
+const Watchlist       = lazy(() => import("./Watchlist"));
+const ThemeSectors    = lazy(() => import("./ThemeSectors"));
+const HelpGuide       = lazy(() => import("./HelpGuide"));
 import SearchModal from "./SearchModal";
+import Spin from "./ui/Spin";
 import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { THEMES } from "../config/themes";
@@ -46,15 +47,17 @@ const TAB_ANIM = {
 
 function SectionContent({ activeTab }: { activeTab: TabId }) {
   return (
-    <AnimatePresence mode="wait">
-      <MotionDiv key={activeTab} {...TAB_ANIM}>
-        {activeTab === "market"    && <MarketDashboard />}
-        {activeTab === "chart"     && <MarketTrends />}
-        {activeTab === "theme"     && <ThemeSectors />}
-        {activeTab === "watchlist" && <Watchlist />}
-        {activeTab === "help"      && <HelpGuide />}
-      </MotionDiv>
-    </AnimatePresence>
+    <Suspense fallback={<div className="flex justify-center pt-20"><Spin /></div>}>
+      <AnimatePresence mode="wait">
+        <MotionDiv key={activeTab} {...TAB_ANIM}>
+          {activeTab === "market"    && <MarketDashboard />}
+          {activeTab === "chart"     && <MarketTrends />}
+          {activeTab === "theme"     && <ThemeSectors />}
+          {activeTab === "watchlist" && <Watchlist />}
+          {activeTab === "help"      && <HelpGuide />}
+        </MotionDiv>
+      </AnimatePresence>
+    </Suspense>
   );
 }
 
