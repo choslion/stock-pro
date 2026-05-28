@@ -8,6 +8,7 @@ import FinanceDataReader as fdr
 from datetime import datetime
 import time
 import sys, os
+import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(__file__))
 
 from dotenv import load_dotenv
@@ -1511,6 +1512,43 @@ def get_ai_stock_analysis(
     )
     result = {"analysis": message.content[0].text.strip()}
     _cache[cache_key] = {"data": result, "ts": now}
+    return result
+
+
+@app.get("/news")
+def get_news():
+    cache_key = "news"
+    now = time.time()
+    entry = _cache.get(cache_key)
+    if entry and now - entry["ts"] < 1800:
+        return entry["data"]
+
+    FEEDS = [
+        ("https://www.yna.co.kr/rss/economy.xml",    "연합뉴스"),
+        ("https://www.hankyung.com/feed/all-news",    "한국경제"),
+        ("https://www.mk.co.kr/rss/30000001/",        "매일경제"),
+    ]
+
+    items: list[dict] = []
+    for url, source in FEEDS:
+        try:
+            resp = httpx.get(url, timeout=6, follow_redirects=True,
+                             headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            root = ET.fromstring(resp.content)
+            for el in root.findall(".//item")[:4]:
+                title_el = el.find("title")
+                link_el  = el.find("link")
+                title = (title_el.text or "").strip() if title_el is not None else ""
+                link  = (link_el.text  or "").strip() if link_el  is not None else ""
+                if title:
+                    items.append({"title": title, "link": link, "source": source})
+        except Exception:
+            pass
+
+    result = {"items": items}
+    if items:
+        _cache[cache_key] = {"data": result, "ts": now}
     return result
 
 

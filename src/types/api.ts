@@ -203,3 +203,14 @@ export interface AiBriefingData {
   briefing:   string;
   fetched_at: string;
 }
+
+// ── /news ─────────────────────────────────────────────────────────────────────
+export interface NewsItem {
+  title:  string;
+  link:   string;
+  source: string;
+}
+
+export interface NewsData {
+  items: NewsItem[];
+}

@@ -8,6 +8,7 @@ const Watchlist       = lazy(() => import("./Watchlist"));
 const ThemeSectors    = lazy(() => import("./ThemeSectors"));
 const HelpGuide       = lazy(() => import("./HelpGuide"));
 import SearchModal from "./SearchModal";
+import NewsTicker from "./NewsTicker";
 import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { THEMES } from "../config/themes";
@@ -153,9 +154,12 @@ export default function StockIndexDashboard() {
         </aside>
 
         {/* 메인 컨텐츠 */}
-        <main className="flex-1 overflow-y-auto p-6 xl:p-10">
-          <div className="max-w-3xl mx-auto">
-            <SectionContent activeTab={activeTab} />
+        <main className="flex-1 overflow-y-auto">
+          <NewsTicker />
+          <div className="p-6 xl:p-10">
+            <div className="max-w-3xl mx-auto">
+              <SectionContent activeTab={activeTab} />
+            </div>
           </div>
         </main>
       </div>
@@ -179,6 +183,7 @@ export default function StockIndexDashboard() {
             </button>
           </div>
         </header>
+        <NewsTicker />
 
         {/* 컨텐츠 */}
         <main className="p-4 pb-20 space-y-6">
