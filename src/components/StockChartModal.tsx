@@ -79,9 +79,9 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
       grid:        { vertLines: { color: "#1f2937" }, horzLines: { color: "#1f2937" } },
       crosshair:   { mode: 1 },
       rightPriceScale: { borderColor: "#374151" },
-      timeScale:   { borderColor: "#374151", timeVisible: true, rightOffset: 8, barSpacing: 8, minBarSpacing: 3 },
-      handleScroll: true,
-      handleScale:  true,
+      timeScale:    { borderColor: "#374151", timeVisible: true, rightOffset: 8 },
+      handleScroll: false,
+      handleScale:  false,
     });
 
     const series = chart.addSeries(LineSeries, {
