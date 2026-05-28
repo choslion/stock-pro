@@ -1634,6 +1634,20 @@ class ChatRequest(BaseModel):
             raise HTTPException(400, "메시지를 입력해주세요.")
         if len(self.message) > 50:
             raise HTTPException(400, "메시지는 50자 이내로 입력해주세요.")
+        if len(self.history) > 20:
+            raise HTTPException(400, "잘못된 요청입니다.")
+        for msg in self.history:
+            if msg.role not in ("user", "assistant"):
+                raise HTTPException(400, "잘못된 요청입니다.")
+            if len(msg.content) > 1000:
+                raise HTTPException(400, "잘못된 요청입니다.")
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host
 
 
 def _check_rate_limits(client_ip: str):
@@ -1681,13 +1695,13 @@ def _stream_chat(message: str, history: list[ChatMessage], snapshot: str):
 - 답변은 핵심만 간결하게 (불필요한 인사말 생략)
 - **, ##, 이모지 등 마크다운 기호 절대 사용 금지, 순수 텍스트로만 답변"""
 
-    messages = [{"role": m.role, "content": m.content} for m in history[-12:]]
+    messages = [{"role": m.role, "content": m.content} for m in history[-6:]]
     messages.append({"role": "user", "content": message})
 
     client = _anthropic.Anthropic(api_key=api_key)
     with client.messages.stream(
         model="claude-haiku-4-5-20251001",
-        max_tokens=1024,
+        max_tokens=512,
         system=system_prompt,
         messages=messages,
     ) as stream:
@@ -1698,7 +1712,7 @@ def _stream_chat(message: str, history: list[ChatMessage], snapshot: str):
 
 @app.post("/chat")
 def post_chat(req: ChatRequest, request: Request):
-    _check_rate_limits(request.client.host)
+    _check_rate_limits(_get_client_ip(request))
     req.validate_message()
 
     # 시장 데이터가 캐시에 없으면 미리 로드
