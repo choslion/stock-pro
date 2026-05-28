@@ -57,7 +57,7 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
 
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const seriesRef    = useRef<ISeriesApi<"Line"> | null>(null);
 
   const isPos = stock.change_rate > 0;
@@ -79,7 +79,7 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
       grid:        { vertLines: { color: "#1f2937" }, horzLines: { color: "#1f2937" } },
       crosshair:   { mode: 1 },
       rightPriceScale: { borderColor: "#374151" },
-      timeScale:    { borderColor: "#374151", timeVisible: true, rightOffset: 2 },
+      timeScale:    { borderColor: "#374151", timeVisible: true, rightOffset: 0 },
       handleScroll: false,
       handleScale:  false,
     });
