@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -1636,6 +1636,25 @@ class ChatRequest(BaseModel):
             raise HTTPException(400, "메시지는 50자 이내로 입력해주세요.")
 
 
+def _check_rate_limits(client_ip: str):
+    now = time.time()
+
+    # IP당 분당 5회
+    ip_key = f"rl_ip_{client_ip}"
+    recent = [t for t in _cache.get(ip_key, {}).get("ts_list", []) if now - t < 60]
+    if len(recent) >= 5:
+        raise HTTPException(429, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.")
+    _cache[ip_key] = {"ts_list": recent + [now], "ts": now}
+
+    # 전체 일일 100회
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    daily_key = f"rl_daily_{today}"
+    count = _cache.get(daily_key, {}).get("count", 0)
+    if count >= 100:
+        raise HTTPException(429, "오늘 질문 한도(100회)에 도달했습니다. 내일 다시 이용해주세요.")
+    _cache[daily_key] = {"count": count + 1, "ts": now}
+
+
 def _stream_chat(message: str, history: list[ChatMessage], snapshot: str):
     import anthropic as _anthropic
     import json
@@ -1678,7 +1697,8 @@ def _stream_chat(message: str, history: list[ChatMessage], snapshot: str):
 
 
 @app.post("/chat")
-def post_chat(req: ChatRequest):
+def post_chat(req: ChatRequest, request: Request):
+    _check_rate_limits(request.client.host)
     req.validate_message()
 
     # 시장 데이터가 캐시에 없으면 미리 로드
