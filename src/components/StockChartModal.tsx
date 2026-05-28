@@ -75,7 +75,7 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
 
     const chart = createChart(containerRef.current, {
       autoSize:    true,
-      layout:      { background: { color: "transparent" }, textColor: "#9ca3af" },
+      layout:      { background: { color: "transparent" }, textColor: "#9ca3af", attributionLogo: false },
       grid:        { vertLines: { color: "#1f2937" }, horzLines: { color: "#1f2937" } },
       crosshair:   { mode: 1 },
       rightPriceScale: { borderColor: "#374151" },
