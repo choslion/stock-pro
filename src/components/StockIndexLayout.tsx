@@ -7,9 +7,9 @@ const MarketTrends    = lazy(() => import("./MarketTrends"));
 const Watchlist       = lazy(() => import("./Watchlist"));
 const ThemeSectors    = lazy(() => import("./ThemeSectors"));
 const HelpGuide       = lazy(() => import("./HelpGuide"));
+const AIChatSection   = lazy(() => import("./AIChatSection"));
 import SearchModal from "./SearchModal";
-import NewsTicker from "./NewsTicker";
-import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon } from "./ui/Icons";
+import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { THEMES } from "../config/themes";
 import { WATCHLIST } from "../config/watchlist";
@@ -22,7 +22,7 @@ const _WL_PARAMS: Record<string, string> = {};
 if (_KR_TICKERS.length) { _WL_PARAMS.kr = _KR_TICKERS.join(","); _WL_PARAMS.kr_names = _KR_NAMES.join(","); }
 if (_US_TICKERS.length) _WL_PARAMS.us = _US_TICKERS.join(",");
 
-type TabId = "market" | "chart" | "theme" | "watchlist" | "help";
+type TabId = "market" | "chart" | "theme" | "watchlist" | "ai" | "help";
 
 interface NavTab {
   id:    TabId;
@@ -35,6 +35,7 @@ const NAV_TABS: NavTab[] = [
   { id: "chart",     label: "차트",   icon: TrendingUpIcon },
   { id: "theme",     label: "테마",   icon: GridIcon       },
   { id: "watchlist", label: "관심",   icon: BookmarkIcon   },
+  { id: "ai",        label: "AI",     icon: SparklesIcon   },
   { id: "help",      label: "도움말", icon: BookOpenIcon   },
 ];
 
@@ -54,6 +55,7 @@ function SectionContent({ activeTab }: { activeTab: TabId }) {
           {activeTab === "chart"     && <MarketTrends />}
           {activeTab === "theme"     && <ThemeSectors />}
           {activeTab === "watchlist" && <Watchlist />}
+          {activeTab === "ai"        && <AIChatSection />}
           {activeTab === "help"      && <HelpGuide />}
         </MotionDiv>
       </AnimatePresence>
@@ -155,7 +157,6 @@ export default function StockIndexDashboard() {
 
         {/* 메인 컨텐츠 */}
         <main className="flex-1 overflow-y-auto">
-          <NewsTicker />
           <div className="p-6 xl:p-10">
             <div className="max-w-3xl mx-auto">
               <SectionContent activeTab={activeTab} />
@@ -183,7 +184,6 @@ export default function StockIndexDashboard() {
             </button>
           </div>
         </header>
-        <NewsTicker />
 
         {/* 컨텐츠 */}
         <main className="p-4 pb-20 space-y-6">

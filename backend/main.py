@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import yfinance as yf
 import httpx
@@ -1614,3 +1616,77 @@ def get_ai_briefing():
     result = {"briefing": text, "fetched_at": fetched_at}
     _cache[cache_key] = {"data": result, "ts": now}
     return result
+
+
+# ── AI 챗봇 ───────────────────────────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+    def validate_message(self):
+        if not self.message or not self.message.strip():
+            raise HTTPException(400, "메시지를 입력해주세요.")
+        if len(self.message) > 50:
+            raise HTTPException(400, "메시지는 50자 이내로 입력해주세요.")
+
+
+def _stream_chat(message: str, history: list[ChatMessage], snapshot: str):
+    import anthropic as _anthropic
+    import json
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        yield 'data: {"text": "ANTHROPIC_API_KEY가 설정되지 않았습니다."}\n\n'
+        yield "data: [DONE]\n\n"
+        return
+
+    today = datetime.utcnow().strftime("%Y년 %m월 %d일")
+    system_prompt = f"""당신은 주식·경제 전문 AI 어시스턴트입니다. 한국어로 친절하고 간결하게 답변하세요.
+
+오늘 날짜: {today}
+
+{snapshot}
+
+규칙:
+- 위 시장 데이터를 참고해 구체적인 수치로 답변하세요
+- 투자 권유나 확정적 예측은 피하고 분석·정보 제공에 집중하세요
+- 데이터가 없는 내용은 없다고 솔직히 말하세요
+- 답변은 핵심만 간결하게 (불필요한 인사말 생략)"""
+
+    messages = [{"role": m.role, "content": m.content} for m in history[-12:]]
+    messages.append({"role": "user", "content": message})
+
+    client = _anthropic.Anthropic(api_key=api_key)
+    with client.messages.stream(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1024,
+        system=system_prompt,
+        messages=messages,
+    ) as stream:
+        for text in stream.text_stream:
+            yield f"data: {json.dumps({'text': text}, ensure_ascii=False)}\n\n"
+    yield "data: [DONE]\n\n"
+
+
+@app.post("/chat")
+def post_chat(req: ChatRequest):
+    req.validate_message()
+
+    # 시장 데이터가 캐시에 없으면 미리 로드
+    if not _cache.get("us_indices"):
+        get_us_indices()
+    if not _cache.get("kospi"):
+        get_kospi()
+
+    snapshot = _build_market_snapshot()
+
+    return StreamingResponse(
+        _stream_chat(req.message, req.history, snapshot),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
