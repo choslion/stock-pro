@@ -1333,22 +1333,22 @@ def _build_market_snapshot() -> str:
     # 미국 지수
     us = (_cache.get("us_indices") or {}).get("data") or {}
     if us:
-        lines.append("## 미국 주요 지수")
+        lines.append("[US Indices]")
         for key in ["sp500", "nasdaq", "dow"]:
             d = us.get(key)
             if d:
                 sign = "+" if d["change_pct"] >= 0 else ""
-                lines.append(f"- {d['label']}: {d['value']:,.2f} ({sign}{d['change_pct']:.2f}%)")
+                lines.append(f"{d['label']}: {d['value']:,.2f} ({sign}{d['change_pct']:.2f}%)")
 
     # 국내 지수
     kr = (_cache.get("kospi") or {}).get("data") or {}
     if kr:
-        lines.append("## 국내 주요 지수")
+        lines.append("[KR Indices]")
         for key, label in [("kospi", "KOSPI"), ("kosdaq", "KOSDAQ")]:
             d = kr.get(key)
             if d:
                 sign = "+" if d["change_pct"] >= 0 else ""
-                lines.append(f"- {label}: {d['value']:,.2f} ({sign}{d['change_pct']:.2f}%)")
+                lines.append(f"{label}: {d['value']:,.2f} ({sign}{d['change_pct']:.2f}%)")
 
     # VIX
     vix_entry = _cache.get("vix")
@@ -1356,42 +1356,42 @@ def _build_market_snapshot() -> str:
         v = vix_entry["data"]
         val = v.get("value") if isinstance(v, dict) else None
         if val:
-            lines.append(f"## 공포지수(VIX)\n- VIX: {val:.2f}")
+            lines.append(f"[VIX] {val:.2f}")
 
     # 원자재 (상위 5개)
     cmd_entry = _cache.get("commodities")
     if cmd_entry and cmd_entry.get("data"):
         raw = cmd_entry["data"]
         cmd_items = (raw["items"] if isinstance(raw, dict) else raw)[:5]
-        lines.append("## 주요 원자재")
+        lines.append("[Commodities]")
         for it in cmd_items:
             sign = "+" if it["change_pct"] >= 0 else ""
-            lines.append(f"- {it['name']}: ${it['value']:,.2f} ({sign}{it['change_pct']:.2f}%)")
+            lines.append(f"{it['name']}: ${it['value']:,.2f} ({sign}{it['change_pct']:.2f}%)")
 
     # 환율 (달러, 엔, 유로)
     fx_entry = _cache.get("forex")
     if fx_entry and fx_entry.get("data"):
         fx_map = {it["pair"]: it for it in fx_entry["data"]}
-        lines.append("## 주요 환율")
-        for pair, label in [("USD/KRW", "달러"), ("EUR/KRW", "유로"), ("JPY/KRW", "엔(100)")]:
+        lines.append("[FX Rates]")
+        for pair, label in [("USD/KRW", "USD/KRW"), ("EUR/KRW", "EUR/KRW"), ("JPY/KRW", "JPY/KRW")]:
             it = fx_map.get(pair)
             if it:
                 sign = "+" if it["change_pct"] >= 0 else ""
-                lines.append(f"- {label}: {it['value']:,.2f}원 ({sign}{it['change_pct']:.2f}%)")
+                lines.append(f"{label}: {it['value']:,.2f} ({sign}{it['change_pct']:.2f}%)")
 
     # 미국 섹터 ETF 상위/하위
     sec_entry = _cache.get("us_sectors")
     if sec_entry and sec_entry.get("data"):
         secs = sorted(sec_entry["data"], key=lambda x: x.get("change_rate", 0), reverse=True)
-        lines.append("## 미국 섹터 동향")
+        lines.append("[US Sectors]")
         for s in secs[:3]:
             sign = "+" if s.get("change_rate", 0) >= 0 else ""
-            lines.append(f"- {s['name']} 강세: {sign}{s['change_rate']:.2f}%")
+            lines.append(f"Top: {s['name']} {sign}{s['change_rate']:.2f}%")
         for s in secs[-2:]:
             sign = "+" if s["change_rate"] >= 0 else ""
-            lines.append(f"- {s['name']} 약세: {sign}{s['change_rate']:.2f}%")
+            lines.append(f"Bottom: {s['name']} {sign}{s['change_rate']:.2f}%")
 
-    return "\n".join(lines) if lines else "현재 시장 데이터를 불러오는 중입니다."
+    return "\n".join(lines) if lines else "No market data available."
 
 
 @app.get("/chart")
@@ -1440,6 +1440,12 @@ def get_chart(
     return {"items": data}
 
 
+def _clean_ai_text(text: str) -> str:
+    import re
+    text = re.sub(r"\*\*|##", "", text)
+    return text.strip()
+
+
 @app.get("/ai-stock-analysis")
 def get_ai_stock_analysis(
     ticker: str = Query(...),
@@ -1449,7 +1455,11 @@ def get_ai_stock_analysis(
     import anthropic as _anthropic
     import datetime as _dt
 
-    cache_key = f"ai_analysis_{ticker}_{market}"
+    market = market.upper()
+    if market not in ("KR", "US"):
+        raise HTTPException(400, "market은 KR 또는 US만 허용됩니다.")
+
+    cache_key = f"ai_analysis_{ticker.upper()}_{market}"
     now = time.time()
     entry = _cache.get(cache_key)
     if entry and now - entry["ts"] < 1800:
@@ -1466,22 +1476,30 @@ def get_ai_stock_analysis(
             df = fdr.DataReader(ticker, str(start), str(end))
             if df.empty:
                 raise HTTPException(404, "데이터 없음")
-            closes  = df["Close"].dropna().tail(20)
+            closes = df["Close"].dropna().tail(20)
+            if len(closes) < 2:
+                raise HTTPException(422, "가격 데이터가 부족합니다.")
             current = float(closes.iloc[-1])
             prev    = float(closes.iloc[-2])
             high20  = float(closes.max())
             low20   = float(closes.min())
             price_str = f"{current:,.0f}원"
+            high_str  = f"{high20:,.0f}원"
+            low_str   = f"{low20:,.0f}원"
         else:
             hist = yf.Ticker(ticker).history(period="1mo")
             if hist.empty:
                 raise HTTPException(404, "데이터 없음")
-            closes  = hist["Close"].dropna().tail(20)
+            closes = hist["Close"].dropna().tail(20)
+            if len(closes) < 2:
+                raise HTTPException(422, "가격 데이터가 부족합니다.")
             current = float(closes.iloc[-1])
             prev    = float(closes.iloc[-2])
             high20  = float(closes.max())
             low20   = float(closes.min())
             price_str = f"${current:,.2f}"
+            high_str  = f"${high20:,.2f}"
+            low_str   = f"${low20:,.2f}"
     except HTTPException:
         raise
     except Exception as e:
@@ -1503,8 +1521,8 @@ def get_ai_stock_analysis(
 Stock: {name} ({ticker}, {market})
 Current price: {price_str}
 Daily change: {sign}{change_pct:.2f}%
-20-day high: {high20:,.2f}
-20-day low: {low20:,.2f}
+20-day high: {high_str}
+20-day low: {low_str}
 Position in 20-day range: {range_pct:.0f}% ({range_desc})
 
 Rules:
@@ -1522,13 +1540,19 @@ Rules:
 - Forbidden: emojis, markdown symbols (**, ##); plain text only
 - End with this exact sentence: "※ AI가 가격 데이터를 기반으로 자동 생성한 참고 정보입니다."""
 
-    client  = _anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    result = {"analysis": message.content[0].text.strip()}
+    try:
+        client  = _anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            temperature=0.2,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = _clean_ai_text(message.content[0].text)
+    except Exception:
+        raise HTTPException(503, "AI 분석을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.")
+
+    result = {"analysis": text}
     _cache[cache_key] = {"data": result, "ts": now}
     return result
 
@@ -1607,7 +1631,8 @@ def get_ai_briefing():
     get_forex()
 
     snapshot = _build_market_snapshot()
-    today = datetime.utcnow().strftime("%Y년 %m월 %d일")
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y년 %m월 %d일")
 
     prompt = f"""You are a professional stock market analyst. Write a Korean market briefing for Korean investors based on the data below ({today}).
 
@@ -1632,13 +1657,17 @@ Rules:
 - Forbidden: markdown symbols (**, ##, emojis); plain text only, minimize line breaks
 - If snapshot data is insufficient, output only: "제공된 시장 데이터가 부족해 시황 판단이 어렵습니다."""
 
-    client = _anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=512,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = message.content[0].text.strip()
+    try:
+        client = _anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=512,
+            temperature=0.2,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = _clean_ai_text(message.content[0].text)
+    except Exception:
+        raise HTTPException(503, "AI 브리핑을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.")
 
     fetched_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     result = {"briefing": text, "fetched_at": fetched_at}
