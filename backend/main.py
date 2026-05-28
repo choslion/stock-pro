@@ -1651,13 +1651,16 @@ def _stream_chat(message: str, history: list[ChatMessage], snapshot: str):
 
 오늘 날짜: {today}
 
+[현재 시장 데이터]
 {snapshot}
 
 규칙:
-- 위 시장 데이터를 참고해 구체적인 수치로 답변하세요
+- 위 시장 데이터가 관련 있을 때만 수치를 인용하세요
+- 시장 데이터에 없는 종목·정보는 일반 지식으로 답변하세요
+- 주식·경제와 무관한 질문은 "저는 주식·경제 관련 질문을 도와드리는 어시스턴트입니다"라고 안내하세요
 - 투자 권유나 확정적 예측은 피하고 분석·정보 제공에 집중하세요
-- 데이터가 없는 내용은 없다고 솔직히 말하세요
-- 답변은 핵심만 간결하게 (불필요한 인사말 생략)"""
+- 답변은 핵심만 간결하게 (불필요한 인사말 생략)
+- **, ##, 이모지 등 마크다운 기호 절대 사용 금지, 순수 텍스트로만 답변"""
 
     messages = [{"role": m.role, "content": m.content} for m in history[-12:]]
     messages.append({"role": "user", "content": message})
