@@ -18,13 +18,36 @@ export default function AIChatSection() {
   const [messages, setMessages]   = useState<Message[]>([]);
   const [input, setInput]         = useState("");
   const [streaming, setStreaming] = useState(false);
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const abortRef   = useRef<AbortController | null>(null);
-  const inputRef   = useRef<HTMLInputElement>(null);
+  const bottomRef    = useRef<HTMLDivElement>(null);
+  const abortRef     = useRef<AbortController | null>(null);
+  const inputRef     = useRef<HTMLInputElement>(null);
+  const bufferRef    = useRef("");   // 수신된 전체 텍스트
+  const displayedRef = useRef(0);   // 현재 표시된 글자 수
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // 타이프라이터 효과: 버퍼를 글자 단위로 소비
+  useEffect(() => {
+    const id = setInterval(() => {
+      const target = bufferRef.current;
+      const shown  = displayedRef.current;
+      if (shown >= target.length) return;
+      const next = Math.min(shown + 2, target.length);
+      displayedRef.current = next;
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (last.role === "assistant") {
+          copy[copy.length - 1] = { ...last, content: target.slice(0, next) };
+        }
+        return copy;
+      });
+    }, 12);
+    return () => clearInterval(id);
+  }, []);
 
   const send = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -32,6 +55,8 @@ export default function AIChatSection() {
 
     const history = messages;
     const next: Message[] = [...history, { role: "user", content: trimmed }];
+    bufferRef.current    = "";
+    displayedRef.current = 0;
     setMessages([...next, { role: "assistant", content: "" }]);
     setInput("");
     setStreaming(true);
@@ -51,7 +76,6 @@ export default function AIChatSection() {
 
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
-      let assistantContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -63,14 +87,13 @@ export default function AIChatSection() {
           const data = line.slice(6).trim();
           if (data === "[DONE]") break;
           try {
-            assistantContent += (JSON.parse(data) as { text: string }).text;
-            setMessages([...next, { role: "assistant", content: assistantContent }]);
+            bufferRef.current += (JSON.parse(data) as { text: string }).text;
           } catch { /* partial chunk */ }
         }
       }
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
-        setMessages([...next, { role: "assistant", content: "오류가 발생했습니다. 다시 시도해주세요." }]);
+        bufferRef.current = "오류가 발생했습니다. 다시 시도해주세요.";
       }
     } finally {
       setStreaming(false);
