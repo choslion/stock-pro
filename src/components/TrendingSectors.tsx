@@ -18,7 +18,7 @@ export default function TrendingSectors() {
     queryFn:  fetchers.sectors,
   });
 
-  const items = data?.items ?? [];
+  const items = (data?.items ?? []).slice(0, 20);
 
   return (
     <div className="min-h-[480px]">
