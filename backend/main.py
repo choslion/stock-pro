@@ -1200,6 +1200,8 @@ def search_stocks(q: str = Query(...)):
                     break
 
         # 3. 미국 — Yahoo Finance 검색 API (영문 티커·이름)
+        yf_tickers: list[str] = []
+        yf_name_map: dict[str, str] = {}
         try:
             yf_search_url = "https://query1.finance.yahoo.com/v1/finance/search"
             params = {"q": q_stripped, "lang": "en-US", "region": "US",
@@ -1212,40 +1214,47 @@ def search_stocks(q: str = Query(...)):
                 item for item in resp.json().get("quotes", [])
                 if item.get("quoteType") in ("EQUITY", "ETF") and "symbol" in item
             ][:5]
-
-            # 한국어 매핑 결과와 합쳐서 중복 제거
-            yf_tickers = [item["symbol"] for item in quotes
-                          if item["symbol"] not in kr_matched_tickers]
+            yf_tickers  = [item["symbol"] for item in quotes
+                           if item["symbol"] not in kr_matched_tickers]
             yf_name_map = {
                 item["symbol"]: (item.get("longname") or item.get("shortname") or item["symbol"])
                 for item in quotes
             }
-            us_tickers = kr_matched_tickers + yf_tickers
-            name_map   = {**yf_name_map, **kr_matched_names}  # 한국어 이름 우선
-
-            if us_tickers:
-                dl_arg  = us_tickers if len(us_tickers) > 1 else us_tickers[0]
-                raw     = yf.download(dl_arg, period="2d", auto_adjust=True, progress=False)
-                close_df = raw["Close"] if not raw.empty else pd.DataFrame()
-
-                for ticker in us_tickers:
-                    try:
-                        c = (close_df.dropna() if len(us_tickers) == 1
-                             else close_df[ticker].dropna() if ticker in close_df.columns
-                             else pd.Series())
-                        price = round(float(c.iloc[-1]), 2) if len(c) >= 1 else 0.0
-                        chg   = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
-                        results.append({
-                            "market":      "US",
-                            "ticker":      ticker,
-                            "name":        name_map.get(ticker, ticker),
-                            "price":       price,
-                            "change_rate": chg,
-                        })
-                    except Exception:
-                        pass
         except Exception:
             pass
+
+        us_tickers = kr_matched_tickers + yf_tickers
+        name_map   = {**yf_name_map, **kr_matched_names}  # 한국어 이름 우선
+
+        if us_tickers:
+            # 가격 조회 (실패해도 종목 자체는 반환)
+            close_df = pd.DataFrame()
+            try:
+                dl_arg   = us_tickers if len(us_tickers) > 1 else us_tickers[0]
+                raw      = yf.download(dl_arg, period="2d", auto_adjust=True, progress=False)
+                close_df = raw["Close"] if not raw.empty else pd.DataFrame()
+            except Exception:
+                pass
+
+            for ticker in us_tickers:
+                price, chg = 0.0, 0.0
+                try:
+                    c = (close_df.dropna() if len(us_tickers) == 1
+                         else close_df[ticker].dropna() if ticker in close_df.columns
+                         else pd.Series())
+                    if len(c) >= 1:
+                        price = round(float(c.iloc[-1]), 2)
+                    if len(c) >= 2:
+                        chg = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2)
+                except Exception:
+                    pass
+                results.append({
+                    "market":      "US",
+                    "ticker":      ticker,
+                    "name":        name_map.get(ticker, ticker),
+                    "price":       price,
+                    "change_rate": chg,
+                })
 
         return results
 
