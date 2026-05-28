@@ -1523,10 +1523,18 @@ def get_news():
     if entry and now - entry["ts"] < 1800:
         return entry["data"]
 
+    # 증권/주식 전용 RSS 채널
     FEEDS = [
-        ("https://www.yna.co.kr/rss/economy.xml",    "연합뉴스"),
-        ("https://www.hankyung.com/feed/all-news",    "한국경제"),
-        ("https://www.mk.co.kr/rss/30000001/",        "매일경제"),
+        ("https://www.yna.co.kr/rss/stock.xml",     "연합뉴스"),
+        ("https://www.hankyung.com/feed/stock",      "한국경제"),
+        ("https://www.mk.co.kr/rss/50200011/",       "매일경제"),
+        ("https://finance.yahoo.com/news/rssindex",  "Yahoo Finance"),
+    ]
+
+    STOCK_KW = [
+        "주식", "증권", "코스피", "코스닥", "나스닥", "S&P", "ETF", "주가",
+        "상장", "배당", "공모", "펀드", "매수", "매도", "투자", "종목",
+        "거래소", "선물", "지수", "장세", "강세", "약세", "시총",
     ]
 
     items: list[dict] = []
@@ -1536,12 +1544,13 @@ def get_news():
                              headers={"User-Agent": "Mozilla/5.0"})
             resp.raise_for_status()
             root = ET.fromstring(resp.content)
-            for el in root.findall(".//item")[:4]:
+            for el in root.findall(".//item")[:6]:
                 title_el = el.find("title")
                 link_el  = el.find("link")
                 title = (title_el.text or "").strip() if title_el is not None else ""
                 link  = (link_el.text  or "").strip() if link_el  is not None else ""
-                if title:
+                is_stock = source == "Yahoo Finance" or any(kw in title for kw in STOCK_KW)
+                if title and is_stock:
                     items.append({"title": title, "link": link, "source": source})
         except Exception:
             pass

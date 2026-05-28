@@ -12,7 +12,7 @@ export default function NewsTicker() {
   const items = data?.items ?? [];
   if (items.length === 0) return null;
 
-  const duration = Math.max(items.length * 7, 40);
+  const duration = Math.max(items.length * 4, 25);
   const doubled  = [...items, ...items];
 
   return (
