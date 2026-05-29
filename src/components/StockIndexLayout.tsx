@@ -8,7 +8,7 @@ const Watchlist       = lazy(() => import("./Watchlist"));
 const HelpGuide       = lazy(() => import("./HelpGuide"));
 const AIChatSection   = lazy(() => import("./AIChatSection"));
 import SearchModal from "./SearchModal";
-import { ChartBarIcon, TrendingUpIcon, BookmarkIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
+import { ChartBarIcon, TrendingUpIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { THEMES } from "../config/themes";
 import { WATCHLIST } from "../config/watchlist";
@@ -63,6 +63,11 @@ const MotionPanel    = motion.div;
 
 function HelpModal({ onClose }: { onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const isDesktop = window.innerWidth >= 1024;
+
+  const panelAnim = isDesktop
+    ? { initial: { opacity: 0, scale: 0.97 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.97 }, transition: { duration: 0.18, ease: "easeOut" as const } }
+    : { initial: { y: "100%" }, animate: { y: 0 }, exit: { y: "100%" }, transition: { type: "spring" as const, stiffness: 300, damping: 30 } };
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -76,8 +81,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex lg:justify-end">
-      {/* 배경 딤 */}
+    <div className="fixed inset-0 z-50 flex items-end lg:items-stretch lg:justify-end">
       <MotionBackdrop
         className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
         onClick={onClose}
@@ -85,22 +89,22 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
+        transition={{ duration: 0.18 }}
       />
-      {/* 패널 — 모바일: 전체화면 / PC: 우측 480px 드로어 */}
       <MotionPanel
         role="dialog"
         aria-modal="true"
         aria-labelledby="help-modal-title"
         className="relative z-10 flex flex-col
-                   w-full h-full
-                   lg:w-[480px] lg:border-l lg:border-gray-700/60
+                   w-full h-[88%] rounded-t-2xl
+                   lg:h-full lg:rounded-none lg:w-[480px] lg:border-l lg:border-gray-700/60
                    bg-gray-900 overflow-hidden"
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
-        exit={{ x: "100%" }}
-        transition={{ type: "spring", stiffness: 320, damping: 32 }}
+        {...panelAnim}
       >
+        {/* 모바일 드래그 핸들 */}
+        <div className="lg:hidden flex justify-center pt-3 pb-1 shrink-0" aria-hidden="true">
+          <div className="w-10 h-1 rounded-full bg-gray-600" />
+        </div>
         <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-gray-900/95 backdrop-blur-sm">
           <span id="help-modal-title" className="text-sm font-semibold text-white">도움말</span>
           <button
@@ -173,18 +177,9 @@ export default function StockIndexDashboard() {
                           flex flex-col backdrop-blur-sm">
           {/* 로고 */}
           <div className="px-4 py-5 border-b border-gray-800/60">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ChartBarIcon className="w-4 h-4 text-blue-400" />
-                <p className="text-sm font-bold tracking-tight text-white">stock-pro</p>
-              </div>
-              <button
-                onClick={() => setShowHelp(true)}
-                className="text-gray-500 hover:text-gray-200 transition-colors"
-                aria-label="도움말"
-              >
-                <QuestionMarkCircleIcon className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-2">
+              <ChartBarIcon className="w-4 h-4 text-blue-400" />
+              <p className="text-sm font-bold tracking-tight text-white">stock-pro</p>
             </div>
             <p className="text-[11px] text-gray-600 mt-0.5 pl-6">실시간 시장 데이터</p>
             <button
@@ -219,6 +214,18 @@ export default function StockIndexDashboard() {
                 </button>
               );
             })}
+            <div className="pt-1 mt-1 border-t border-gray-800/40">
+              <button
+                onClick={() => setShowHelp(true)}
+                className="w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-lg
+                           transition-all duration-150
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400
+                           text-gray-500 hover:bg-gray-800/50 hover:text-gray-300"
+              >
+                <BookOpenIcon className="w-4 h-4 shrink-0" />
+                <span className="text-sm font-medium">도움말</span>
+              </button>
+            </div>
           </nav>
 
           {/* 하단 버전 */}

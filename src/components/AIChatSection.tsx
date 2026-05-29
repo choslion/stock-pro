@@ -1,4 +1,68 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense, lazy } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+const StockGuide = lazy(() => import("./StockGuide"));
+
+const MotionBackdrop = motion.div;
+const MotionSheet    = motion.div;
+
+function StockGuideSheet({ onClose }: { onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end">
+      <MotionBackdrop
+        className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
+      />
+      <MotionSheet
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guide-sheet-title"
+        className="relative z-10 flex flex-col w-full h-[88%] rounded-t-2xl bg-gray-900 overflow-hidden"
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      >
+        <div className="flex justify-center pt-3 pb-1 shrink-0" aria-hidden="true">
+          <div className="w-10 h-1 rounded-full bg-gray-600" />
+        </div>
+        <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-800/60">
+          <span id="guide-sheet-title" className="text-sm font-semibold text-white">주식 기초 가이드</span>
+          <button
+            ref={closeRef}
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+            aria-label="닫기"
+          >
+            <span className="text-lg leading-none">×</span>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-6">
+          <Suspense fallback={null}>
+            <StockGuide />
+          </Suspense>
+        </div>
+      </MotionSheet>
+    </div>
+  );
+}
 
 interface Message {
   role: "user" | "assistant";
@@ -41,6 +105,7 @@ export default function AIChatSection() {
   const [input, setInput]         = useState("");
   const [streaming, setStreaming] = useState(false);
   const [suggestions]             = useState(pickSuggestions);
+  const [showGuide, setShowGuide] = useState(false);
   const bottomRef    = useRef<HTMLDivElement>(null);
   const abortRef     = useRef<AbortController | null>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
@@ -134,6 +199,9 @@ export default function AIChatSection() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)] lg:h-[calc(100vh-8rem)] max-w-2xl mx-auto">
+      <AnimatePresence>
+        {showGuide && <StockGuideSheet onClose={() => setShowGuide(false)} />}
+      </AnimatePresence>
 
       {/* 헤더 */}
       <div className="pb-3 border-b border-gray-800/60 mb-4">
@@ -163,6 +231,13 @@ export default function AIChatSection() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={() => setShowGuide(true)}
+              className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-dashed border-gray-700
+                         text-xs text-gray-500 hover:text-gray-300 hover:border-gray-500 transition-colors text-center"
+            >
+              📖 주식 기초 가이드 보기
+            </button>
           </div>
         ) : (
           messages.map((msg, i) => (
