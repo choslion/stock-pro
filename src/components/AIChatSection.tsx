@@ -198,7 +198,7 @@ export default function AIChatSection() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] lg:h-[calc(100vh-8rem)] max-w-2xl mx-auto">
+    <div className="flex flex-col h-[calc(100dvh-8.5rem)] lg:h-[calc(100vh-8rem)] max-w-2xl mx-auto">
       <AnimatePresence>
         {showGuide && <StockGuideSheet onClose={() => setShowGuide(false)} />}
       </AnimatePresence>
