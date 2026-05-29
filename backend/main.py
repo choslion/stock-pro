@@ -610,12 +610,25 @@ def debug_etf_columns():
     }
 
 
+_OVERSEAS_KWS = [
+    "미국", "나스닥", "S&P", "차이나", "일본", "유럽", "인도",
+    "베트남", "홍콩", "MSCI", "선진국", "신흥국", "글로벌",
+    "WTI", "원유", "달러인덱스", "브라질", "대만",
+]
+
+
 @app.get("/etf")
 def get_etf(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
         df = fdr.StockListing("ETF/KR")
         if df.empty:
             raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
+
+        # 순수 국내 ETF만: 해외 추종 ETF 이름 키워드로 제외
+        name_col = next((c for c in ["Name"] if c in df.columns), None)
+        if name_col:
+            mask = df[name_col].apply(lambda n: not any(kw in str(n) for kw in _OVERSEAS_KWS))
+            df = df[mask].copy()
 
         # ETF/KR 실제 컬럼: Price, ChangeRate (Close/ChagesRatio 아님)
         price_col  = next((c for c in ["Price", "Close"] if c in df.columns), None)
@@ -714,13 +727,6 @@ def _etf_kr_rows(df, type: str, limit: int):
             "marcap": int(mc_val) if mc_val is not None and pd.notna(mc_val) else 0,
         })
     return result
-
-
-_OVERSEAS_KWS = [
-    "미국", "나스닥", "S&P", "차이나", "일본", "유럽", "인도",
-    "베트남", "홍콩", "MSCI", "선진국", "신흥국", "글로벌",
-    "WTI", "원유", "달러인덱스", "브라질", "대만",
-]
 
 
 @app.get("/etf-kr-overseas")
