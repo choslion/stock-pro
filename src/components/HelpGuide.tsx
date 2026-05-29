@@ -139,19 +139,19 @@ function AccordionItem({ q, a }: FaqItem) {
     <div className="border-b border-gray-700/50 last:border-0">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 py-3 px-1 text-left hover:bg-gray-700/20 transition-colors"
+        className="w-full flex items-center justify-between gap-3 py-4 px-1 text-left hover:bg-gray-700/20 transition-colors"
         aria-expanded={open}
       >
-        <span className="text-sm font-medium text-gray-200">{q}</span>
+        <span className="text-sm font-semibold text-gray-100">{q}</span>
         <ChevronDownIcon
           className={`w-4 h-4 shrink-0 text-gray-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
       <div className={`grid transition-all duration-300 ease-in-out ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
         <div className="overflow-hidden">
-          <div className="px-1 pb-4 space-y-2">
+          <div className="px-2 pt-1 pb-5 space-y-3 border-l-2 border-gray-700/60 ml-1">
             {paragraphs.map((para, i) => (
-              <p key={i} className="text-sm text-gray-400 leading-relaxed whitespace-pre-line">
+              <p key={i} className="text-sm text-gray-400 leading-loose whitespace-pre-line">
                 {para}
               </p>
             ))}
