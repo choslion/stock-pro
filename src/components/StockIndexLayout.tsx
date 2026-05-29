@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 const MotionDiv = motion.div;
@@ -59,22 +59,53 @@ function SectionContent({ activeTab }: { activeTab: TabId }) {
 }
 
 function HelpModal({ onClose }: { onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/98 overflow-y-auto">
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-slate-900/95 border-b border-gray-800/60 backdrop-blur-sm">
-        <span className="text-sm font-semibold text-white">도움말</span>
-        <button
-          onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
-          aria-label="닫기"
-        >
-          <XMarkIcon className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="px-4 py-6 max-w-2xl mx-auto">
-        <Suspense fallback={null}>
-          <HelpGuide />
-        </Suspense>
+    <div className="fixed inset-0 z-50 flex lg:justify-end">
+      {/* 배경 딤 */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      {/* 패널 — 모바일: 전체화면 / PC: 우측 480px 드로어 */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="help-modal-title"
+        className="relative z-10 flex flex-col
+                   w-full h-full
+                   lg:w-[480px] lg:border-l lg:border-gray-700/60
+                   bg-gray-900 overflow-hidden"
+      >
+        <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-gray-900/95 backdrop-blur-sm">
+          <span id="help-modal-title" className="text-sm font-semibold text-white">도움말</span>
+          <button
+            ref={closeRef}
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+            aria-label="도움말 닫기"
+          >
+            <XMarkIcon className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-6">
+          <Suspense fallback={null}>
+            <HelpGuide />
+          </Suspense>
+        </div>
       </div>
     </div>
   );
