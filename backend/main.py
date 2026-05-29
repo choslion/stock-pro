@@ -7,7 +7,8 @@ import yfinance as yf
 import httpx
 import pandas as pd
 import FinanceDataReader as fdr
-from datetime import datetime
+from datetime import datetime, timedelta
+from pykrx import stock as _krx
 import time
 import sys, os
 import xml.etree.ElementTree as ET
@@ -616,68 +617,95 @@ _OVERSEAS_KWS = [
     "WTI", "원유", "달러인덱스", "브라질", "대만",
 ]
 
+# pykrx ETF 이름 캐시 (프로세스 전체에서 공유)
+_pykrx_etf_name_cache: dict[str, str] = {}
+
+
+def _pykrx_etf_name(ticker: str) -> str:
+    if ticker not in _pykrx_etf_name_cache:
+        try:
+            _pykrx_etf_name_cache[ticker] = _krx.get_etf_ticker_name(ticker)
+        except Exception:
+            _pykrx_etf_name_cache[ticker] = ticker
+    return _pykrx_etf_name_cache[ticker]
+
+
+def _fetch_etf_kr_df() -> pd.DataFrame:
+    """pykrx로 KRX 전체 ETF 조회 → 표준 컬럼 DataFrame.
+    fdr보다 커버리지가 넓어 최근 상장 ETF도 포함됨.
+    최근 2거래일 데이터로 등락률 계산 후 반환.
+    """
+    today = datetime.now()
+    dfs: list[pd.DataFrame] = []
+
+    for delta in range(7):
+        d = (today - timedelta(days=delta)).strftime("%Y%m%d")
+        try:
+            df = _krx.get_etf_ohlcv_by_ticker(d)
+            if not df.empty:
+                dfs.append(df.copy())
+                if len(dfs) == 2:
+                    break
+        except Exception:
+            pass
+
+    if not dfs:
+        return pd.DataFrame()
+
+    curr = dfs[0].copy()
+
+    # 등락률: 전일 종가 대비
+    if len(dfs) >= 2:
+        prev = dfs[1]
+        common = curr.index.intersection(prev.index)
+        c = pd.to_numeric(curr.loc[common, "종가"], errors="coerce")
+        p = pd.to_numeric(prev.loc[common, "종가"], errors="coerce")
+        chg = pd.Series(0.0, index=curr.index)
+        valid = (p > 0) & p.notna() & c.notna()
+        if valid.any():
+            chg[common[valid.values]] = ((c[valid] - p[valid]) / p[valid] * 100).round(2)
+        curr["ChangeRate"] = chg
+    else:
+        curr["ChangeRate"] = 0.0
+
+    # 컬럼 표준화
+    rename = {}
+    if "종가"    in curr.columns: rename["종가"]    = "Price"
+    if "거래량"  in curr.columns: rename["거래량"]  = "Volume"
+    if "거래대금" in curr.columns: rename["거래대금"] = "Amount"
+    curr = curr.rename(columns=rename)
+    curr["Code"] = curr.index  # 티커
+
+    # 거래량 0 제거
+    if "Volume" in curr.columns:
+        curr["Volume"] = pd.to_numeric(curr["Volume"], errors="coerce")
+        curr = curr[curr["Volume"].fillna(0) > 0].copy()
+
+    # 이름: fdr 우선, 미등록 티커는 pykrx 개별 조회
+    try:
+        fdr_df = fdr.StockListing("ETF/KR")
+        sym = next((c for c in ["Symbol", "Code"] if c in fdr_df.columns), None)
+        fdr_names: dict[str, str] = dict(zip(fdr_df[sym], fdr_df["Name"])) if sym else {}
+    except Exception:
+        fdr_names = {}
+
+    curr["Name"] = [
+        fdr_names.get(t) or _pykrx_etf_name(t)
+        for t in curr.index
+    ]
+
+    return curr
+
 
 @app.get("/etf")
 def get_etf(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
-        df = fdr.StockListing("ETF/KR")
+        df = _fetch_etf_kr_df()
         if df.empty:
             raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
-
-        # 순수 국내 ETF만: 해외 추종 ETF 이름 키워드로 제외
-        name_col = next((c for c in ["Name"] if c in df.columns), None)
-        if name_col:
-            mask = df[name_col].apply(lambda n: not any(kw in str(n) for kw in _OVERSEAS_KWS))
-            df = df[mask].copy()
-
-        # ETF/KR 실제 컬럼: Price, ChangeRate (Close/ChagesRatio 아님)
-        price_col  = next((c for c in ["Price", "Close"] if c in df.columns), None)
-        rate_col   = next((c for c in ["ChangeRate", "ChagesRatio", "ChgRatio"] if c in df.columns), None)
-        marcap_col = next((c for c in ["Marcap", "MarCap", "marcap"] if c in df.columns), None)
-
-        for col in ["Volume", "Amount", price_col, rate_col, marcap_col]:
-            if col and col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-
-        if "Volume" in df.columns:
-            df = df[df["Volume"].fillna(0) > 0].copy()
-
-        chg = df[rate_col].fillna(0.0) if rate_col else pd.Series(0.0, index=df.index)
-
-        if type == "popular" and marcap_col:
-            sorted_df = df[df[marcap_col].fillna(0) > 0].sort_values(marcap_col, ascending=False)
-        elif type == "volume" and "Volume" in df.columns:
-            sorted_df = df.sort_values("Volume", ascending=False)
-        elif type == "rising":
-            sorted_df = df[chg > 0].sort_values(rate_col or "Volume", ascending=False)
-        elif type == "falling":
-            sorted_df = df[chg < 0].sort_values(rate_col or "Volume", ascending=True)
-        else:
-            sort_col = "Amount" if "Amount" in df.columns else "Volume"
-            sorted_df = df.sort_values(sort_col, ascending=False)
-
-        top = sorted_df.head(limit)
-        if top.empty:
-            return []
-
-        result = []
-        for rank, (_, row) in enumerate(top.iterrows(), 1):
-            price_val  = row.get(price_col)  if price_col  else None
-            rate_val   = row.get(rate_col)   if rate_col   else None
-            vol_val    = row.get("Volume")
-            amt_val    = row.get("Amount")
-            mc_val     = row.get(marcap_col) if marcap_col else None
-            result.append({
-                "rank": rank,
-                "ticker": str(row.get("Symbol", row.get("Code", ""))),
-                "name": str(row.get("Name", "")),
-                "price": int(price_val) if price_val is not None and pd.notna(price_val) else 0,
-                "change_rate": round(float(rate_val), 2) if rate_val is not None and pd.notna(rate_val) else 0.0,
-                "volume": int(vol_val) if vol_val is not None and pd.notna(vol_val) else 0,
-                "amount": int(amt_val) if amt_val is not None and pd.notna(amt_val) else 0,
-                "marcap": int(mc_val) if mc_val is not None and pd.notna(mc_val) else 0,
-            })
-        return result
+        # 순수 국내 ETF: 해외 추종 제외
+        mask = df["Name"].apply(lambda n: not any(kw in str(n) for kw in _OVERSEAS_KWS))
+        return _etf_kr_rows(df[mask].copy(), type, limit)
 
     return _get_cached(f"etf_{type}", fetch)
 
@@ -732,14 +760,12 @@ def _etf_kr_rows(df, type: str, limit: int):
 @app.get("/etf-kr-overseas")
 def get_etf_kr_overseas(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
-        df = fdr.StockListing("ETF/KR")
+        df = _fetch_etf_kr_df()
         if df.empty:
             raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
-        name_col = next((c for c in ["Name"] if c in df.columns), None)
-        if name_col:
-            mask = df[name_col].apply(lambda n: any(kw in str(n) for kw in _OVERSEAS_KWS))
-            df = df[mask].copy()
-        return _etf_kr_rows(df, type, limit)
+        # 해외 추종 ETF만 필터
+        mask = df["Name"].apply(lambda n: any(kw in str(n) for kw in _OVERSEAS_KWS))
+        return _etf_kr_rows(df[mask].copy(), type, limit)
     return _get_cached(f"etf_kr_overseas_{type}", fetch)
 
 

@@ -5,3 +5,4 @@ httpx==0.28.1
 finance-datareader>=0.9.93
 pandas==2.2.3
 anthropic>=0.40.0
+pykrx>=1.0.47
