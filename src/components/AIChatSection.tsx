@@ -43,7 +43,7 @@ function StockGuideSheet({ onClose }: { onClose: () => void }) {
         <div className="flex justify-center pt-3 pb-1 shrink-0" aria-hidden="true">
           <div className="w-10 h-1 rounded-full bg-gray-600" />
         </div>
-        <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-800/60">
+        <div className="shrink-0 flex items-center justify-between px-5 py-3 border-b border-gray-800/60">
           <span id="guide-sheet-title" className="text-sm font-semibold text-white">주식 기초 가이드</span>
           <button
             ref={closeRef}
