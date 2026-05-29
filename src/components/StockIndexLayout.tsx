@@ -105,16 +105,21 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         <div className="lg:hidden flex justify-center pt-3 pb-1 shrink-0" aria-hidden="true">
           <div className="w-10 h-1 rounded-full bg-gray-600" />
         </div>
-        <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-gray-900/95 backdrop-blur-sm">
-          <span id="help-modal-title" className="text-sm font-semibold text-white">이용 가이드</span>
-          <button
-            ref={closeRef}
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
-            aria-label="이용 가이드 닫기"
-          >
-            <XMarkIcon className="w-4 h-4" />
-          </button>
+        <div className="shrink-0 border-b border-gray-800/60 bg-gray-900/95 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-5 pt-4 pb-1.5">
+            <span id="help-modal-title" className="text-sm font-semibold text-white">이용 가이드</span>
+            <button
+              ref={closeRef}
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+              aria-label="이용 가이드 닫기"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="px-5 pb-4 text-xs text-gray-400">
+            stock-pro의 주요 기능과 사용 방법을 확인해보세요.
+          </p>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-6">
           <Suspense fallback={null}>

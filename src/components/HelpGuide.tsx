@@ -175,9 +175,6 @@ function AccordionItem({ q, a, caution }: FaqItem) {
 export default function HelpGuide() {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-400 pb-1">
-        stock-pro의 주요 기능과 사용 방법을 확인해보세요.
-      </p>
       {SECTIONS.map((section) => {
         const Icon = section.icon;
         return (
