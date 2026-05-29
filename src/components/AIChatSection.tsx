@@ -5,12 +5,34 @@ interface Message {
   content: string;
 }
 
-const SUGGESTIONS = [
+const SUGGESTION_POOL = [
   "오늘 시장 분위기 어때?",
   "코스피 최근 흐름 알려줘",
   "달러 환율이 주식에 미치는 영향은?",
   "나스닥이랑 코스닥 상관관계 설명해줘",
+  "지금 주목해야 할 섹터는?",
+  "금리가 주식에 미치는 영향은?",
+  "반도체 업황 요즘 어때?",
+  "미국 빅테크 주식 전망은?",
+  "배당주 투자 어떻게 생각해?",
+  "AI 관련 주식 어때?",
+  "2차전지 섹터 요즘 어때?",
+  "원/달러 환율 최근 흐름은?",
+  "ETF랑 개별 주식 어떻게 달라?",
+  "PER이 높으면 어떤 의미야?",
+  "지금 방어주 살 때야?",
+  "공매도가 뭐야?",
 ];
+
+function pickSuggestions() {
+  const pool = [...SUGGESTION_POOL];
+  const result: string[] = [];
+  while (result.length < 4 && pool.length > 0) {
+    const i = Math.floor(Math.random() * pool.length);
+    result.push(pool.splice(i, 1)[0]);
+  }
+  return result;
+}
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
 
@@ -18,6 +40,7 @@ export default function AIChatSection() {
   const [messages, setMessages]   = useState<Message[]>([]);
   const [input, setInput]         = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [suggestions]             = useState(pickSuggestions);
   const bottomRef    = useRef<HTMLDivElement>(null);
   const abortRef     = useRef<AbortController | null>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
@@ -129,7 +152,7 @@ export default function AIChatSection() {
           <div className="space-y-5 pt-4">
             <p className="text-center text-gray-600 text-xs">추천 질문</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button
                   key={s}
                   onClick={() => send(s)}
