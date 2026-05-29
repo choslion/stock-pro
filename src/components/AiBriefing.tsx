@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import axiosInstance from "../lib/axiosInstance";
 
 interface IconProps { className?: string; }
@@ -56,19 +57,36 @@ export default function AiBriefing() {
       </div>
 
       {/* 본문 */}
-      <div style={{ minHeight: 100 }}>
-        {loading ? (
-          <div className="space-y-2.5 pt-1">
-            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
-            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
-            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
-            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
-            <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-3/6" />
-          </div>
-        ) : (
-          <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{briefing}</p>
-        )}
-      </div>
+      <motion.div layout transition={{ duration: 0.35, ease: "easeOut" }}>
+        <AnimatePresence mode="wait">
+          {loading ? (
+            <motion.div
+              key="skeleton"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-2.5 pt-1"
+            >
+              <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
+              <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
+              <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
+              <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
+              <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-3/6" />
+            </motion.div>
+          ) : (
+            <motion.p
+              key="content"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap"
+            >
+              {briefing}
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 }
