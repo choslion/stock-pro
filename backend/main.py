@@ -458,7 +458,7 @@ def _get_listing(market: str) -> pd.DataFrame:
 def get_stock_ranking(
     type: str = Query("amount"),   # amount | volume | rising | falling
     market: str = Query("ALL"),    # ALL | KOSPI | KOSDAQ
-    limit: int = Query(10),
+    limit: int = Query(20),
 ):
     def fetch():
         df = _get_listing(market)
@@ -550,7 +550,7 @@ def get_investor_trends(market: str = Query("KOSPI")):
 
         def to_rows(sorted_df, extra_key=None, extra_col=None):
             rows = []
-            for i, (_, row) in enumerate(sorted_df.head(10).iterrows(), 1):
+            for i, (_, row) in enumerate(sorted_df.head(20).iterrows(), 1):
                 item = {
                     "rank": i,
                     "ticker": str(row.get("Symbol", row.get("Code", ""))),
@@ -1083,7 +1083,7 @@ def get_theme_ranking(tickers: str = Query(...), limit: int = Query(10)):
 
 
 @app.get("/stocks/us-ranking")
-def get_us_ranking(type: str = Query("amount"), limit: int = Query(10)):
+def get_us_ranking(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
         tickers = list(US_STOCKS.keys())
         raw = yf.download(tickers, period="2d", auto_adjust=True, progress=False)
