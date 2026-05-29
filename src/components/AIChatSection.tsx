@@ -51,7 +51,7 @@ function StockGuideSheet({ onClose }: { onClose: () => void }) {
             className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
             aria-label="닫기"
           >
-            <span className="text-lg leading-none">×</span>
+            <span className="text-lg leading-none" aria-hidden="true">×</span>
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -211,14 +211,19 @@ export default function AIChatSection() {
             현재 시장 데이터 연동
           </span>
         </div>
-        <p className="text-xs text-gray-500 mt-0.5">시장·종목·경제에 대해 무엇이든 물어보세요</p>
+        <p className="text-xs text-gray-400 mt-0.5">시장·종목·경제에 대해 무엇이든 물어보세요</p>
       </div>
 
       {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto space-y-4 pb-2">
+      <div
+        className="flex-1 overflow-y-auto space-y-4 pb-2"
+        role="log"
+        aria-live="polite"
+        aria-label="대화 내용"
+      >
         {messages.length === 0 ? (
           <div className="space-y-5 pt-4">
-            <p className="text-center text-gray-600 text-xs">추천 질문</p>
+            <p className="text-center text-gray-500 text-xs">추천 질문</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {suggestions.map((s) => (
                 <button
@@ -243,11 +248,12 @@ export default function AIChatSection() {
           messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               {msg.role === "assistant" && (
-                <span className="w-6 h-6 mr-2 mt-0.5 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 text-[10px] font-bold shrink-0">
+                <span aria-hidden="true" className="w-6 h-6 mr-2 mt-0.5 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 text-[10px] font-bold shrink-0">
                   AI
                 </span>
               )}
               <div
+                aria-label={msg.role === "user" ? "내 질문" : "AI 답변"}
                 className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap
                   ${msg.role === "user"
                     ? "bg-blue-600 text-white rounded-br-sm"
@@ -255,10 +261,10 @@ export default function AIChatSection() {
                   }`}
               >
                 {msg.content || (streaming && i === messages.length - 1
-                  ? <span className="inline-flex gap-1 items-center">
-                      <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0ms]" />
-                      <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:150ms]" />
-                      <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:300ms]" />
+                  ? <span role="status" aria-label="AI가 답변 중입니다" className="inline-flex gap-1 items-center">
+                      <span aria-hidden="true" className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0ms]" />
+                      <span aria-hidden="true" className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:150ms]" />
+                      <span aria-hidden="true" className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:300ms]" />
                     </span>
                   : ""
                 )}
@@ -279,14 +285,19 @@ export default function AIChatSection() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
               placeholder="질문을 입력하세요..."
+              aria-label="AI에게 질문하기"
               disabled={streaming}
               maxLength={50}
               className="w-full bg-gray-800/60 rounded-xl px-4 py-2.5 text-sm text-white
                          placeholder-gray-500 outline-none focus:ring-1 focus:ring-blue-500/60
                          disabled:opacity-50 transition-all pr-12"
             />
-            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] tabular-nums
-              ${input.length >= 45 ? "text-red-400" : "text-gray-600"}`}>
+            <span
+              aria-live="polite"
+              aria-label={`${input.length}자 입력됨, 최대 50자`}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] tabular-nums
+              ${input.length >= 45 ? "text-red-400" : "text-gray-500"}`}
+            >
               {input.length}/50
             </span>
           </div>
@@ -302,7 +313,7 @@ export default function AIChatSection() {
             {streaming ? "중단" : "전송"}
           </button>
         </div>
-        <p className="text-[10px] text-gray-700 mt-1.5 text-center">
+        <p className="text-[10px] text-gray-500 mt-1.5 text-center">
           AI 답변은 참고용입니다. 투자 결정은 본인 판단으로 하세요.
         </p>
       </div>
