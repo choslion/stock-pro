@@ -30,7 +30,7 @@ FGI_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # 간단한 인메모리 캐시 (pykrx는 KRX 사이트 스크래핑이라 느림)
 _cache: dict = {}
-_CACHE_TTL = 300  # 5분
+_CACHE_TTL = 60   # 1분
 
 
 def _get_cached(key: str, fetch_fn):
