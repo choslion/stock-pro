@@ -44,9 +44,9 @@ export default function StockRanking() {
   });
 
   const isOverseas = market === "overseas";
-  const stocks: (RankingStock | UsRankingStock)[] = isOverseas
+  const stocks: (RankingStock | UsRankingStock)[] = (isOverseas
     ? ((data as OverseasRankingData)?.stocks ?? [])
-    : ((data as DomesticRankingData)?.items ?? []);
+    : ((data as DomesticRankingData)?.items ?? [])).slice(0, 20);
   const usdKrw    = isOverseas ? (data as OverseasRankingData)?.usd_krw ?? null : null;
   const fetchedAt = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 

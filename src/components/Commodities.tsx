@@ -19,7 +19,7 @@ export default function Commodities() {
     queryFn:  fetchers.commodities,
   });
 
-  const items     = data?.items ?? [];
+  const items     = (data?.items ?? []).slice(0, 20);
   const fetchedAt = data?.fetched_at ?? null;
   const usdKrw    = data?.usd_krw ?? null;
 

@@ -16,7 +16,7 @@ export default function Forex() {
     queryFn:  fetchers.forex,
   });
 
-  const items     = data?.items ?? [];
+  const items     = (data?.items ?? []).slice(0, 20);
   const fetchedAt = data?.fetched_at ?? null;
 
   if (isLoading) return <div className="flex justify-center py-10"><Spin /></div>;

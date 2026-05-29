@@ -39,7 +39,7 @@ export default function InvestorTrends() {
     queryFn:  fetchers.investorTrends,
   });
 
-  const rows: InvestorTrendStock[] = data?.[subTab] ?? [];
+  const rows: InvestorTrendStock[] = (data?.[subTab] ?? []).slice(0, 20);
 
   return (
     <div className="min-h-[480px]">
