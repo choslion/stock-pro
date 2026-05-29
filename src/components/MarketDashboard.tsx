@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Suspense, lazy } from "react";
 import GetUsIndices from "./GetUsIndices";
 import GetVixFgiScore from "./GetVixFgiScore";
 import GetRangeVix from "./GetRangeVix";
@@ -9,12 +9,14 @@ import TrendingSectors from "./TrendingSectors";
 import AiBriefing from "./AiBriefing";
 import Card from "./ui/Card";
 import { ChartBarIcon } from "./ui/Icons";
+const ThemeSectors = lazy(() => import("./ThemeSectors"));
 
-type Tab = "kr" | "us";
+type Tab = "kr" | "us" | "theme";
 
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "kr", label: "국내" },
-  { id: "us", label: "해외" },
+  { id: "kr",    label: "국내" },
+  { id: "us",    label: "해외" },
+  { id: "theme", label: "테마" },
 ];
 
 export default function MarketDashboard() {
@@ -57,6 +59,11 @@ export default function MarketDashboard() {
           </Card>
           <GetRangeVix />
         </div>
+      )}
+      {tab === "theme" && (
+        <Suspense fallback={null}>
+          <ThemeSectors />
+        </Suspense>
       )}
     </div>
   );

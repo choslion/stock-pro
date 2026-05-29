@@ -5,11 +5,10 @@ const MotionDiv = motion.div;
 const MarketDashboard = lazy(() => import("./MarketDashboard"));
 const MarketTrends    = lazy(() => import("./MarketTrends"));
 const Watchlist       = lazy(() => import("./Watchlist"));
-const ThemeSectors    = lazy(() => import("./ThemeSectors"));
 const HelpGuide       = lazy(() => import("./HelpGuide"));
 const AIChatSection   = lazy(() => import("./AIChatSection"));
 import SearchModal from "./SearchModal";
-import { ChartBarIcon, TrendingUpIcon, GridIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon } from "./ui/Icons";
+import { ChartBarIcon, TrendingUpIcon, BookmarkIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { THEMES } from "../config/themes";
 import { WATCHLIST } from "../config/watchlist";
@@ -22,7 +21,7 @@ const _WL_PARAMS: Record<string, string> = {};
 if (_KR_TICKERS.length) { _WL_PARAMS.kr = _KR_TICKERS.join(","); _WL_PARAMS.kr_names = _KR_NAMES.join(","); }
 if (_US_TICKERS.length) _WL_PARAMS.us = _US_TICKERS.join(",");
 
-type TabId = "market" | "chart" | "theme" | "watchlist" | "ai" | "help";
+type TabId = "market" | "chart" | "watchlist" | "ai";
 
 interface NavTab {
   id:    TabId;
@@ -31,12 +30,10 @@ interface NavTab {
 }
 
 const NAV_TABS: NavTab[] = [
-  { id: "market",    label: "시장",   icon: ChartBarIcon   },
-  { id: "chart",     label: "차트",   icon: TrendingUpIcon },
-  { id: "theme",     label: "테마",   icon: GridIcon       },
-  { id: "watchlist", label: "관심",   icon: BookmarkIcon   },
-  { id: "ai",        label: "AI",     icon: SparklesIcon   },
-  { id: "help",      label: "도움말", icon: BookOpenIcon   },
+  { id: "market",    label: "시장", icon: ChartBarIcon   },
+  { id: "chart",     label: "차트", icon: TrendingUpIcon },
+  { id: "watchlist", label: "관심", icon: BookmarkIcon   },
+  { id: "ai",        label: "AI",   icon: SparklesIcon   },
 ];
 
 const TAB_ANIM = {
@@ -53,19 +50,40 @@ function SectionContent({ activeTab }: { activeTab: TabId }) {
         <MotionDiv key={activeTab} {...TAB_ANIM}>
           {activeTab === "market"    && <MarketDashboard />}
           {activeTab === "chart"     && <MarketTrends />}
-          {activeTab === "theme"     && <ThemeSectors />}
           {activeTab === "watchlist" && <Watchlist />}
           {activeTab === "ai"        && <AIChatSection />}
-          {activeTab === "help"      && <HelpGuide />}
         </MotionDiv>
       </AnimatePresence>
     </Suspense>
   );
 }
 
+function HelpModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/98 overflow-y-auto">
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-slate-900/95 border-b border-gray-800/60 backdrop-blur-sm">
+        <span className="text-sm font-semibold text-white">도움말</span>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+          aria-label="닫기"
+        >
+          <XMarkIcon className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="px-4 py-6 max-w-2xl mx-auto">
+        <Suspense fallback={null}>
+          <HelpGuide />
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
 export default function StockIndexDashboard() {
   const [activeTab, setActiveTab]   = useState<TabId>("market");
   const [showSearch, setShowSearch] = useState(false);
+  const [showHelp, setShowHelp]     = useState(false);
   const queryClient = useQueryClient();
 
   // 백그라운드 프리패치 — 앱 로드 1.5초 후 모든 탭 데이터를 미리 수신
@@ -79,16 +97,16 @@ export default function StockIndexDashboard() {
       queryClient.prefetchQuery({ queryKey: Q.score(),       queryFn: fetchers.score       });
       queryClient.prefetchQuery({ queryKey: Q.fgi(),         queryFn: fetchers.fgi         });
       queryClient.prefetchQuery({ queryKey: Q.usSectors(),   queryFn: fetchers.usSectors   });
+      // 시장 > 테마 탭 (첫 번째 테마)
+      const t0 = THEMES[0];
+      if (t0.kr_stocks.length)     queryClient.prefetchQuery({ queryKey: Q.themeKr(t0.id), queryFn: () => fetchers.themeKr(t0.kr_stocks.map((s) => s.ticker).join(",")) });
+      if (t0.us_candidates.length) queryClient.prefetchQuery({ queryKey: Q.themeUs(t0.id), queryFn: () => fetchers.themeUs(t0.us_candidates.map((s) => s.ticker).join(","), 10) });
       // 차트 탭
       queryClient.prefetchQuery({ queryKey: Q.investorTrends(), queryFn: fetchers.investorTrends });
       queryClient.prefetchQuery({ queryKey: Q.commodities(), queryFn: fetchers.commodities });
       queryClient.prefetchQuery({ queryKey: Q.forex(),       queryFn: fetchers.forex       });
       queryClient.prefetchQuery({ queryKey: Q.ranking("domestic", "amount"), queryFn: () => fetchers.ranking("domestic", "amount") });
       queryClient.prefetchQuery({ queryKey: Q.etf("kr", "popular"),          queryFn: () => fetchers.etf("kr", "popular")          });
-      // 테마 탭 (첫 번째 테마)
-      const t0 = THEMES[0];
-      if (t0.kr_stocks.length)     queryClient.prefetchQuery({ queryKey: Q.themeKr(t0.id), queryFn: () => fetchers.themeKr(t0.kr_stocks.map((s) => s.ticker).join(",")) });
-      if (t0.us_candidates.length) queryClient.prefetchQuery({ queryKey: Q.themeUs(t0.id), queryFn: () => fetchers.themeUs(t0.us_candidates.map((s) => s.ticker).join(","), 10) });
       // 관심 탭
       if (Object.keys(_WL_PARAMS).length > 0) {
         queryClient.prefetchQuery({ queryKey: Q.watchlist(_KR_TICKERS.join(","), _US_TICKERS.join(",")), queryFn: () => fetchers.watchlist(_WL_PARAMS) });
@@ -100,6 +118,7 @@ export default function StockIndexDashboard() {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
+      {showHelp   && <HelpModal  onClose={() => setShowHelp(false)}   />}
 
       {/* ════════ PC (lg+): 사이드바 레이아웃 ════════ */}
       <div className="hidden lg:flex min-h-screen">
@@ -149,9 +168,16 @@ export default function StockIndexDashboard() {
             })}
           </nav>
 
-          {/* 하단 버전 */}
-          <div className="px-4 py-3 border-t border-gray-800/60 text-[11px] text-gray-700">
-            v1.0
+          {/* 하단 버전 + 도움말 */}
+          <div className="px-4 py-3 border-t border-gray-800/60 flex items-center justify-between">
+            <span className="text-[11px] text-gray-700">v1.0</span>
+            <button
+              onClick={() => setShowHelp(true)}
+              className="text-gray-600 hover:text-gray-300 transition-colors"
+              aria-label="도움말"
+            >
+              <QuestionMarkCircleIcon className="w-4 h-4" />
+            </button>
           </div>
         </aside>
 
@@ -170,18 +196,27 @@ export default function StockIndexDashboard() {
         {/* 모바일 헤더 */}
         <header className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-gray-800/60 px-4 py-2.5">
           <div className="flex items-center justify-between">
-            <div className="w-8" />
+            <div className="w-16" />
             <div className="flex items-center gap-1.5">
               <ChartBarIcon className="w-3.5 h-3.5 text-blue-400" />
               <h1 className="text-sm font-semibold text-white tracking-tight">stock-pro</h1>
             </div>
-            <button
-              onClick={() => setShowSearch(true)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
-              aria-label="종목 검색"
-            >
-              <MagnifyingGlassIcon className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowHelp(true)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+                aria-label="도움말"
+              >
+                <QuestionMarkCircleIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setShowSearch(true)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
+                aria-label="종목 검색"
+              >
+                <MagnifyingGlassIcon className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </header>
 
