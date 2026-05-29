@@ -106,12 +106,12 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           <div className="w-10 h-1 rounded-full bg-gray-600" />
         </div>
         <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-gray-900/95 backdrop-blur-sm">
-          <span id="help-modal-title" className="text-sm font-semibold text-white">도움말</span>
+          <span id="help-modal-title" className="text-sm font-semibold text-white">이용 가이드</span>
           <button
             ref={closeRef}
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
-            aria-label="도움말 닫기"
+            aria-label="이용 가이드 닫기"
           >
             <XMarkIcon className="w-4 h-4" />
           </button>
@@ -223,7 +223,7 @@ export default function StockIndexDashboard() {
                            text-gray-500 hover:bg-gray-800/50 hover:text-gray-300"
               >
                 <BookOpenIcon className="w-4 h-4 shrink-0" />
-                <span className="text-sm font-medium">도움말</span>
+                <span className="text-sm font-medium">이용 가이드</span>
               </button>
             </div>
           </nav>
@@ -258,7 +258,7 @@ export default function StockIndexDashboard() {
               <button
                 onClick={() => setShowHelp(true)}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
-                aria-label="도움말"
+                aria-label="이용 가이드"
               >
                 <QuestionMarkCircleIcon className="w-4 h-4" />
               </button>
