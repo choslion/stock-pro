@@ -58,6 +58,9 @@ function SectionContent({ activeTab }: { activeTab: TabId }) {
   );
 }
 
+const MotionBackdrop = motion.div;
+const MotionPanel    = motion.div;
+
 function HelpModal({ onClose }: { onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -75,13 +78,17 @@ function HelpModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex lg:justify-end">
       {/* 배경 딤 */}
-      <div
+      <MotionBackdrop
         className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
         onClick={onClose}
         aria-hidden="true"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
       />
       {/* 패널 — 모바일: 전체화면 / PC: 우측 480px 드로어 */}
-      <div
+      <MotionPanel
         role="dialog"
         aria-modal="true"
         aria-labelledby="help-modal-title"
@@ -89,6 +96,10 @@ function HelpModal({ onClose }: { onClose: () => void }) {
                    w-full h-full
                    lg:w-[480px] lg:border-l lg:border-gray-700/60
                    bg-gray-900 overflow-hidden"
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", stiffness: 320, damping: 32 }}
       >
         <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-gray-900/95 backdrop-blur-sm">
           <span id="help-modal-title" className="text-sm font-semibold text-white">도움말</span>
@@ -106,7 +117,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
             <HelpGuide />
           </Suspense>
         </div>
-      </div>
+      </MotionPanel>
     </div>
   );
 }
@@ -149,7 +160,9 @@ export default function StockIndexDashboard() {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
-      {showHelp   && <HelpModal  onClose={() => setShowHelp(false)}   />}
+      <AnimatePresence>
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      </AnimatePresence>
 
       {/* ════════ PC (lg+): 사이드바 레이아웃 ════════ */}
       <div className="hidden lg:flex min-h-screen">
@@ -160,9 +173,18 @@ export default function StockIndexDashboard() {
                           flex flex-col backdrop-blur-sm">
           {/* 로고 */}
           <div className="px-4 py-5 border-b border-gray-800/60">
-            <div className="flex items-center gap-2">
-              <ChartBarIcon className="w-4 h-4 text-blue-400" />
-              <p className="text-sm font-bold tracking-tight text-white">stock-pro</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ChartBarIcon className="w-4 h-4 text-blue-400" />
+                <p className="text-sm font-bold tracking-tight text-white">stock-pro</p>
+              </div>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="text-gray-500 hover:text-gray-200 transition-colors"
+                aria-label="도움말"
+              >
+                <QuestionMarkCircleIcon className="w-4 h-4" />
+              </button>
             </div>
             <p className="text-[11px] text-gray-600 mt-0.5 pl-6">실시간 시장 데이터</p>
             <button
@@ -199,16 +221,9 @@ export default function StockIndexDashboard() {
             })}
           </nav>
 
-          {/* 하단 버전 + 도움말 */}
-          <div className="px-4 py-3 border-t border-gray-800/60 flex items-center justify-between">
+          {/* 하단 버전 */}
+          <div className="px-4 py-3 border-t border-gray-800/60">
             <span className="text-[11px] text-gray-700">v1.0</span>
-            <button
-              onClick={() => setShowHelp(true)}
-              className="text-gray-600 hover:text-gray-300 transition-colors"
-              aria-label="도움말"
-            >
-              <QuestionMarkCircleIcon className="w-4 h-4" />
-            </button>
           </div>
         </aside>
 
