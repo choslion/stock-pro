@@ -8,7 +8,12 @@ import httpx
 import pandas as pd
 import FinanceDataReader as fdr
 from datetime import datetime, timedelta
-from pykrx import stock as _krx
+try:
+    from pykrx import stock as _krx
+    _HAS_PYKRX = True
+except Exception:
+    _krx = None
+    _HAS_PYKRX = False
 import time
 import sys, os
 import xml.etree.ElementTree as ET
@@ -632,9 +637,11 @@ def _pykrx_etf_name(ticker: str) -> str:
 
 def _fetch_etf_kr_df() -> pd.DataFrame:
     """pykrx로 KRX 전체 ETF 조회 → 표준 컬럼 DataFrame.
-    fdr보다 커버리지가 넓어 최근 상장 ETF도 포함됨.
-    최근 2거래일 데이터로 등락률 계산 후 반환.
+    pykrx 미설치 시 fdr로 폴백.
     """
+    if not _HAS_PYKRX:
+        return fdr.StockListing("ETF/KR")
+
     today = datetime.now()
     dfs: list[pd.DataFrame] = []
 
@@ -650,7 +657,7 @@ def _fetch_etf_kr_df() -> pd.DataFrame:
             pass
 
     if not dfs:
-        return pd.DataFrame()
+        return fdr.StockListing("ETF/KR")
 
     curr = dfs[0].copy()
 
