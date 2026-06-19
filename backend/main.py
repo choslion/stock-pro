@@ -31,6 +31,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/health")
+def health():
+    """경량 헬스체크 — UptimeRobot 등 keep-alive 핑용 (스크래핑 없이 즉시 200)"""
+    return {"status": "ok", "ts": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+
 FGI_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 FGI_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
