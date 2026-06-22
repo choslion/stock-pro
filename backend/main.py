@@ -27,11 +27,11 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "HEAD"],
     allow_headers=["*"],
 )
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     """경량 헬스체크 — UptimeRobot 등 keep-alive 핑용 (스크래핑 없이 즉시 200)"""
     return {"status": "ok", "ts": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
