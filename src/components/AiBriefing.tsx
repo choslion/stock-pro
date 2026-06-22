@@ -20,6 +20,9 @@ function fmtTs(isoUtc: string): string | null {
   });
 }
 
+// 자동 갱신 주기 (백엔드 캐시가 살아있으면 캐시 히트라 비용 부담 없음)
+const REFRESH_INTERVAL_MS = 10 * 60 * 1000;   // 10분
+
 export default function AiBriefing() {
   const [briefing, setBriefing]   = useState("");
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
@@ -27,17 +30,45 @@ export default function AiBriefing() {
   const [error, setError]         = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let cancelled = false;
+
+    const fetchBriefing = () => {
       axiosInstance
         .get<{ briefing: string; fetched_at: string }>("/ai-briefing")
         .then((res) => {
+          if (cancelled) return;
           setBriefing(res.data.briefing ?? "");
           setFetchedAt(res.data.fetched_at ?? null);
+          setError(false);
         })
-        .catch(() => setError(true))
-        .finally(() => setLoading(false));
-    }, 400);
-    return () => clearTimeout(timer);
+        .catch(() => {
+          if (!cancelled) setError(true);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+
+    // 최초 로드는 살짝 지연 (스켈레톤 깜빡임 방지)
+    const initialTimer = setTimeout(fetchBriefing, 400);
+
+    // 주기적 자동 갱신 — 탭이 보일 때만 호출
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchBriefing();
+    }, REFRESH_INTERVAL_MS);
+
+    // 탭으로 돌아오면 즉시 한 번 갱신
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchBriefing();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   if (error) return <div className="mb-6" />;
