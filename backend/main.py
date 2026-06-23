@@ -67,6 +67,33 @@ def _get_cached(key: str, fetch_fn):
     return data
 
 
+def _batch_close(tickers: list, period: str = "5d") -> dict:
+    """여러 티커를 yf.download 한 번으로 일괄 수집해 {ticker: 정제된 Close Series}를 반환.
+
+    종목별 yf.Ticker().history() 직렬 호출(왕복 N회)을 단일 요청으로 대체한다.
+    데이터를 못 가져온 티커는 결과 dict에서 누락되므로 호출부에서 .get()으로 처리한다.
+    """
+    out: dict = {}
+    if not tickers:
+        return out
+    try:
+        raw = yf.download(tickers, period=period, auto_adjust=True, progress=False)
+    except Exception:
+        return out
+    if raw is None or raw.empty or "Close" not in raw:
+        return out
+    close = raw["Close"]
+    # 티커가 1개면 yfinance가 MultiIndex 없이 Series를 반환할 수 있음
+    if isinstance(close, pd.Series):
+        close = close.to_frame(tickers[0])
+    for t in tickers:
+        try:
+            out[t] = close[t].dropna()
+        except Exception:
+            continue
+    return out
+
+
 
 
 # ── 기존 엔드포인트 ────────────────────────────────────────────────
@@ -189,13 +216,14 @@ def get_commodities():
         except Exception:
             pass
         result = []
+        closes = _batch_close([t for t, _, _ in ITEMS])
         for ticker, name, unit in ITEMS:
             try:
-                hist = yf.Ticker(ticker).history(period="5d")
-                if hist.empty or len(hist) < 2:
+                c = closes.get(ticker)
+                if c is None or len(c) < 2:
                     continue
-                current = float(hist["Close"].iloc[-1])
-                prev    = float(hist["Close"].iloc[-2])
+                current = float(c.iloc[-1])
+                prev    = float(c.iloc[-2])
                 change  = current - prev
                 result.append({
                     "name":       name,
@@ -227,13 +255,14 @@ def get_forex():
             ("SGDKRW=X", "싱가포르달러", "SGD/KRW", 1),
         ]
         result = []
+        closes = _batch_close([p[0] for p in PAIRS])
         for ticker, label, pair, mul in PAIRS:
             try:
-                hist = yf.Ticker(ticker).history(period="5d")
-                if hist.empty or len(hist) < 2:
+                c = closes.get(ticker)
+                if c is None or len(c) < 2:
                     continue
-                current = float(hist["Close"].iloc[-1]) * mul
-                prev    = float(hist["Close"].iloc[-2]) * mul
+                current = float(c.iloc[-1]) * mul
+                prev    = float(c.iloc[-2]) * mul
                 change  = current - prev
                 result.append({
                     "pair":       pair,
@@ -265,13 +294,14 @@ def get_us_sectors():
             ("XLU",  "유틸리티"),
         ]
         result = []
+        closes = _batch_close([t for t, _ in SECTORS])
         for ticker, name in SECTORS:
             try:
-                hist = yf.Ticker(ticker).history(period="5d")
-                if hist.empty or len(hist) < 2:
+                c = closes.get(ticker)
+                if c is None or len(c) < 2:
                     continue
-                current = float(hist["Close"].iloc[-1])
-                prev    = float(hist["Close"].iloc[-2])
+                current = float(c.iloc[-1])
+                prev    = float(c.iloc[-2])
                 change_rate = round((current - prev) / prev * 100, 2)
                 result.append({"name": name, "ticker": ticker, "change_rate": change_rate})
             except Exception:
@@ -284,25 +314,27 @@ def get_us_sectors():
 def get_us_indices():
     def fetch():
         result = {}
-        for key, ticker, label in [
+        INDICES = [
             ("sp500",  "^GSPC", "S&P 500"),
             ("nasdaq", "^IXIC", "NASDAQ"),
             ("dow",    "^DJI",  "DOW"),
-        ]:
+        ]
+        closes = _batch_close([t for _, t, _ in INDICES])
+        for key, ticker, label in INDICES:
             try:
-                hist = yf.Ticker(ticker).history(period="5d")
-                if hist.empty:
+                c = closes.get(ticker)
+                if c is None or len(c) == 0:
                     result[key] = None
                     continue
-                current = float(hist["Close"].iloc[-1])
-                prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else current
+                current = float(c.iloc[-1])
+                prev = float(c.iloc[-2]) if len(c) >= 2 else current
                 change = current - prev
                 result[key] = {
                     "label": label,
                     "value": round(current, 2),
                     "change": round(change, 2),
                     "change_pct": round(change / prev * 100, 2),
-                    "date": hist.index[-1].strftime("%Y-%m-%d"),
+                    "date": c.index[-1].strftime("%Y-%m-%d"),
                 }
             except Exception:
                 result[key] = None
