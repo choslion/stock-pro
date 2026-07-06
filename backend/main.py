@@ -17,6 +17,7 @@ except Exception:
 import time
 import threading
 import sys, os
+import html as _html
 import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -1724,12 +1725,11 @@ def get_news():
     if entry and now - entry["ts"] < 1800:
         return entry["data"]
 
-    # 주식·증권 전문 RSS
+    # 경제·증권 RSS (2026-07 기준 동작 확인 — 서울경제/조선비즈/이데일리/한경 RSS는 폐지됨)
     FEEDS = [
-        ("https://www.sedaily.com/RssService/RssMain?RssCateId=02", "서울경제"),
-        ("https://biz.chosun.com/rss/stock.xml",                    "조선비즈"),
-        ("https://www.edaily.co.kr/rss/rssData.asp?MenuItem=1",     "이데일리"),
-        ("https://finance.yahoo.com/news/rssindex",                  "Yahoo Finance"),
+        ("https://www.yna.co.kr/rss/economy.xml",   "연합뉴스"),
+        ("https://rss.mt.co.kr/mt_news.xml",        "머니투데이"),
+        ("https://finance.yahoo.com/news/rssindex", "Yahoo Finance"),
     ]
 
     # 주식 핵심 키워드 — 반드시 하나 이상 포함
@@ -1740,20 +1740,28 @@ def get_news():
     ]
 
     items: list[dict] = []
+    MAX_PER_FEED = 6
     for url, source in FEEDS:
         try:
             resp = httpx.get(url, timeout=6, follow_redirects=True,
                              headers={"User-Agent": "Mozilla/5.0"})
             resp.raise_for_status()
             root = ET.fromstring(resp.content)
-            for el in root.findall(".//item")[:6]:
+            picked = 0
+            # 일반 경제 피드는 앞쪽 기사가 주식과 무관할 수 있어 넉넉히 훑으며 골라낸다
+            for el in root.findall(".//item"):
+                if picked >= MAX_PER_FEED:
+                    break
                 title_el = el.find("title")
                 link_el  = el.find("link")
                 title = (title_el.text or "").strip() if title_el is not None else ""
                 link  = (link_el.text  or "").strip() if link_el  is not None else ""
+                # 일부 피드(머니투데이 등)는 제목을 이중 이스케이프해서 내려줌 (&#039; &quot;)
+                title = _html.unescape(title)
                 is_stock = source == "Yahoo Finance" or any(kw in title for kw in STOCK_KW)
                 if title and is_stock:
                     items.append({"title": title, "link": link, "source": source})
+                    picked += 1
         except Exception:
             pass
 
