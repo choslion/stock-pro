@@ -23,22 +23,56 @@ function fmtTs(isoUtc: string): string | null {
 // 자동 갱신 주기 (백엔드 캐시가 살아있으면 캐시 히트라 비용 부담 없음)
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;   // 10분
 
+const DISCLAIMER = "※ AI가 시장 데이터를 분석하여 자동 생성된 브리핑입니다.";
+
+type Tone = "up" | "down" | "mixed";
+
+interface BriefingPoint { label: string; text: string; }
+
+interface BriefingData {
+  briefing:    string;
+  headline?:   string;
+  tone?:       Tone;
+  points?:     BriefingPoint[];
+  fetched_at:  string;
+}
+
+const TONE_CHIP: Record<Tone, { label: string; cls: string }> = {
+  up:    { label: "상승", cls: "bg-red-500/15 text-red-400"     },
+  down:  { label: "하락", cls: "bg-blue-500/15 text-blue-400"   },
+  mixed: { label: "엇갈림", cls: "bg-amber-500/15 text-amber-400" },
+};
+
+/** 등락률·부호 숫자(+2.1%, -0.8 등)를 국장 관례 색(상승 빨강/하락 파랑)으로 하이라이트 */
+function Nums({ text }: { text: string }) {
+  const parts = text.split(/([+-][\d,]+(?:\.\d+)?%?)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (/^[+-][\d,]/.test(part)) {
+          const color = part.startsWith("+") ? "text-red-400" : "text-blue-400";
+          return <span key={i} className={`font-semibold tabular-nums ${color}`}>{part}</span>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 export default function AiBriefing() {
-  const [briefing, setBriefing]   = useState("");
-  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(false);
+  const [data, setData]       = useState<BriefingData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchBriefing = () => {
       axiosInstance
-        .get<{ briefing: string; fetched_at: string }>("/ai-briefing")
+        .get<BriefingData>("/ai-briefing")
         .then((res) => {
           if (cancelled) return;
-          setBriefing(res.data.briefing ?? "");
-          setFetchedAt(res.data.fetched_at ?? null);
+          setData(res.data);
           setError(false);
         })
         .catch(() => {
@@ -73,6 +107,9 @@ export default function AiBriefing() {
 
   if (error) return <div className="mb-6" />;
 
+  const structured = !!data?.headline;
+  const tone = data?.tone && TONE_CHIP[data.tone] ? TONE_CHIP[data.tone] : null;
+
   return (
     <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 to-slate-900/60 px-5 py-4 mb-6">
 
@@ -81,9 +118,14 @@ export default function AiBriefing() {
         <div className="flex items-center gap-2">
           <SparkleIcon className="w-4 h-4 text-blue-400" />
           <span className="text-sm font-semibold text-blue-300">AI 시황 브리핑</span>
+          {structured && tone && !loading && (
+            <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${tone.cls}`}>
+              {tone.label}
+            </span>
+          )}
         </div>
-        {fetchedAt && !loading && (
-          <span className="text-[11px] text-gray-500">{fmtTs(fetchedAt)} 기준</span>
+        {data?.fetched_at && !loading && (
+          <span className="text-[11px] text-gray-500">{fmtTs(data.fetched_at)} 기준</span>
         )}
       </div>
 
@@ -99,11 +141,36 @@ export default function AiBriefing() {
               transition={{ duration: 0.2 }}
               className="space-y-2.5 pt-1"
             >
+              <div className="h-4 bg-gray-700/60 rounded-full animate-pulse w-4/6" />
               <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
               <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-full" />
               <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
-              <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
-              <div className="h-3 bg-gray-700/60 rounded-full animate-pulse w-3/6" />
+            </motion.div>
+          ) : structured ? (
+            <motion.div
+              key="structured"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+            >
+              <p className="text-[15px] font-semibold text-white leading-snug">
+                {data!.headline}
+              </p>
+              {(data!.points?.length ?? 0) > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {data!.points!.map((p, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="shrink-0 mt-0.5 whitespace-nowrap text-[11px] font-semibold px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-400">
+                        {p.label}
+                      </span>
+                      <span className="text-sm text-gray-300 leading-relaxed">
+                        <Nums text={p.text} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-3 text-[11px] text-gray-600">{DISCLAIMER}</p>
             </motion.div>
           ) : (
             <motion.p
@@ -113,7 +180,7 @@ export default function AiBriefing() {
               transition={{ duration: 0.35, ease: "easeOut" }}
               className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap"
             >
-              {briefing}
+              <Nums text={data?.briefing ?? ""} />
             </motion.p>
           )}
         </AnimatePresence>
