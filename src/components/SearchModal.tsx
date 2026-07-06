@@ -2,7 +2,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
 import StockChartModal from "./StockChartModal";
-import { MagnifyingGlassIcon, XMarkIcon } from "./ui/Icons";
+import { MagnifyingGlassIcon, XMarkIcon, StarIcon, StarSolidIcon } from "./ui/Icons";
+import { useWatchlistStore } from "../store/useWatchlistStore";
+import { useToastStore } from "../store/useToastStore";
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -20,6 +22,11 @@ interface ResultItemProps {
 }
 
 function ResultItem({ item, onClick }: ResultItemProps) {
+  const isStarred = useWatchlistStore((s) => s.entries.some((e) => e.ticker === item.ticker));
+  const add       = useWatchlistStore((s) => s.add);
+  const remove    = useWatchlistStore((s) => s.remove);
+  const addToast  = useToastStore((s) => s.addToast);
+
   const isPos = item.change_rate > 0;
   const isNeg = item.change_rate < 0;
   const rateColor = isPos ? "text-red-400" : isNeg ? "text-blue-400" : "text-gray-500";
@@ -27,26 +34,46 @@ function ResultItem({ item, onClick }: ResultItemProps) {
     ? (item.price ? item.price.toLocaleString("ko-KR") + "원" : "-")
     : (item.price ? "$" + item.price.toFixed(2) : "-");
 
+  const toggleStar = () => {
+    if (isStarred) {
+      remove(item.ticker);
+    } else {
+      add({ ticker: item.ticker, name: item.name, market: item.market });
+      addToast(`${item.name} 관심종목에 추가했어요.`, "success");
+    }
+  };
+
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-800/60 transition-colors border-b border-gray-800/40 last:border-0 text-left"
-    >
-      <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded
-        ${item.market === "KR" ? "bg-blue-900/60 text-blue-300" : "bg-yellow-900/60 text-yellow-300"}`}>
-        {item.market}
-      </span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate text-white">{item.name}</p>
-        <p className="text-xs text-gray-500">{item.ticker}</p>
-      </div>
-      <div className="text-right shrink-0">
-        <p className="text-sm text-gray-200 tabular-nums">{priceStr}</p>
-        <p className={`text-xs font-semibold tabular-nums ${rateColor}`}>
-          {isPos ? "+" : ""}{item.change_rate.toFixed(2)}%
-        </p>
-      </div>
-    </button>
+    <div className="flex items-center border-b border-gray-800/40 last:border-0 hover:bg-gray-800/60 transition-colors">
+      <button
+        onClick={onClick}
+        className="flex-1 min-w-0 flex items-center gap-3 pl-4 pr-2 py-3 text-left"
+      >
+        <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded
+          ${item.market === "KR" ? "bg-blue-900/60 text-blue-300" : "bg-yellow-900/60 text-yellow-300"}`}>
+          {item.market}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate text-white">{item.name}</p>
+          <p className="text-xs text-gray-500">{item.ticker}</p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm text-gray-200 tabular-nums">{priceStr}</p>
+          <p className={`text-xs font-semibold tabular-nums ${rateColor}`}>
+            {isPos ? "+" : ""}{item.change_rate.toFixed(2)}%
+          </p>
+        </div>
+      </button>
+      <button
+        onClick={toggleStar}
+        aria-label={isStarred ? `${item.name} 관심종목에서 삭제` : `${item.name} 관심종목에 추가`}
+        aria-pressed={isStarred}
+        className={`shrink-0 w-9 h-9 mr-2 flex items-center justify-center rounded-lg transition-colors
+          ${isStarred ? "text-yellow-400 hover:text-yellow-300" : "text-gray-600 hover:text-yellow-400"}`}
+      >
+        {isStarred ? <StarSolidIcon className="w-4 h-4" /> : <StarIcon className="w-4 h-4" />}
+      </button>
+    </div>
   );
 }
 
