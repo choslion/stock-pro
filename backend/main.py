@@ -15,6 +15,7 @@ except Exception:
     _krx = None
     _HAS_PYKRX = False
 import time
+import threading
 import sys, os
 import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(__file__))
@@ -42,16 +43,46 @@ FGI_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # 간단한 인메모리 캐시 (pykrx는 KRX 사이트 스크래핑이라 느림)
 _cache: dict = {}
-_CACHE_TTL = 60   # 1분
+_CACHE_TTL = 60            # 1분 — 이 안이면 fresh
+_CACHE_HARD_TTL = 30 * 60  # 30분 — 이보다 오래된 데이터는 stale 반환 없이 동기 재수집
+
+_refresh_inflight: set = set()
+_refresh_lock = threading.Lock()
+
+
+def _refresh_in_background(key: str, fetch_fn):
+    """캐시 키를 백그라운드 스레드에서 갱신. 같은 키의 중복 갱신은 스킵."""
+    with _refresh_lock:
+        if key in _refresh_inflight:
+            return
+        _refresh_inflight.add(key)
+
+    def run():
+        try:
+            data = fetch_fn()
+            _cache[key] = {"data": data, "ts": time.time()}
+        except Exception:
+            pass  # 갱신 실패 시 기존 stale 데이터 유지
+        finally:
+            with _refresh_lock:
+                _refresh_inflight.discard(key)
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def _get_cached(key: str, fetch_fn):
-    """캐시 히트/미스 관계없이 데이터가 처음 수집된 시각(fetched_at)을 함께 반환한다."""
+    """캐시 히트/미스 관계없이 데이터가 처음 수집된 시각(fetched_at)을 함께 반환한다.
+
+    stale-while-revalidate: TTL이 지나도 HARD_TTL 이내면 옛 데이터를 즉시 반환하고
+    백그라운드에서 갱신한다. 사용자는 콜드 스타트 직후를 제외하면 항상 즉시 응답을 받는다.
+    """
     now = time.time()
     entry = _cache.get(key)
-    if entry and now - entry["ts"] < _CACHE_TTL:
+    if entry and now - entry["ts"] < _CACHE_HARD_TTL:
         data = entry["data"]
         ts   = entry["ts"]
+        if now - ts >= _CACHE_TTL:
+            _refresh_in_background(key, fetch_fn)
     else:
         data = fetch_fn()
         ts   = now
@@ -1924,3 +1955,42 @@ def post_chat(req: ChatRequest, request: Request):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── 캐시 워머 ─────────────────────────────────────────────────────────────────
+# 프런트 첫 화면(시장 탭)과 프리패치 대상 캐시를 서버가 미리 채워둔다.
+# SWR(_get_cached)과 함께 동작해, 사용자 요청은 콜드 스타트 직후를 제외하면 항상 캐시 히트.
+
+_WARM_INTERVAL = 45  # 초 — TTL(60s)보다 짧게 돌며 만료 임박 캐시를 백그라운드 갱신
+
+_WARM_TARGETS = [
+    # 시장 탭 (첫 화면)
+    ("kospi",           lambda: get_kospi()),
+    ("kr_score",        lambda: get_kr_score()),
+    ("sectors",         lambda: get_sectors(market="KOSPI")),
+    ("us_indices",      lambda: get_us_indices()),
+    ("score",           lambda: get_score()),
+    ("fgi",             lambda: get_fgi()),
+    ("us_sectors",      lambda: get_us_sectors()),
+    # 차트 탭 (프런트 프리패치 대상)
+    ("investor_trends", lambda: get_investor_trends(market="KOSPI")),
+    ("commodities",     lambda: get_commodities()),
+    ("forex",           lambda: get_forex()),
+    ("ranking",         lambda: get_stock_ranking(type="amount", market="ALL", limit=20)),
+    ("etf",             lambda: get_etf(type="popular", limit=20)),
+]
+
+
+def _warm_loop():
+    while True:
+        for name, fn in _WARM_TARGETS:
+            try:
+                fn()
+            except Exception:
+                pass  # 개별 실패는 다음 주기에 재시도
+        time.sleep(_WARM_INTERVAL)
+
+
+@app.on_event("startup")
+def _start_cache_warmer():
+    threading.Thread(target=_warm_loop, daemon=True, name="cache-warmer").start()
