@@ -4,11 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 const MotionDiv = motion.div;
 const MarketDashboard = lazy(() => import("./MarketDashboard"));
 const MarketTrends    = lazy(() => import("./MarketTrends"));
+const NewsSection     = lazy(() => import("./NewsSection"));
 const Watchlist       = lazy(() => import("./Watchlist"));
 const HelpGuide       = lazy(() => import("./HelpGuide"));
 const AIChatSection   = lazy(() => import("./AIChatSection"));
 import SearchModal from "./SearchModal";
-import { ChartBarIcon, TrendingUpIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
+import { ChartBarIcon, TrendingUpIcon, NewspaperIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { THEMES } from "../config/themes";
 import { WATCHLIST } from "../config/watchlist";
@@ -21,7 +22,7 @@ const _WL_PARAMS: Record<string, string> = {};
 if (_KR_TICKERS.length) { _WL_PARAMS.kr = _KR_TICKERS.join(","); _WL_PARAMS.kr_names = _KR_NAMES.join(","); }
 if (_US_TICKERS.length) _WL_PARAMS.us = _US_TICKERS.join(",");
 
-type TabId = "market" | "chart" | "watchlist" | "ai";
+type TabId = "market" | "chart" | "news" | "watchlist" | "ai";
 
 interface NavTab {
   id:    TabId;
@@ -32,6 +33,7 @@ interface NavTab {
 const NAV_TABS: NavTab[] = [
   { id: "market",    label: "시장", icon: ChartBarIcon   },
   { id: "chart",     label: "차트", icon: TrendingUpIcon },
+  { id: "news",      label: "뉴스", icon: NewspaperIcon  },
   { id: "watchlist", label: "관심", icon: BookmarkIcon   },
   { id: "ai",        label: "AI",   icon: SparklesIcon   },
 ];
@@ -50,6 +52,7 @@ function SectionContent({ activeTab }: { activeTab: TabId }) {
         <MotionDiv key={activeTab} {...TAB_ANIM}>
           {activeTab === "market"    && <MarketDashboard />}
           {activeTab === "chart"     && <MarketTrends />}
+          {activeTab === "news"      && <NewsSection />}
           {activeTab === "watchlist" && <Watchlist />}
           {activeTab === "ai"        && <AIChatSection />}
         </MotionDiv>
@@ -158,6 +161,8 @@ export default function StockIndexDashboard() {
       queryClient.prefetchQuery({ queryKey: Q.forex(),       queryFn: fetchers.forex       });
       queryClient.prefetchQuery({ queryKey: Q.ranking("domestic", "amount"), queryFn: () => fetchers.ranking("domestic", "amount") });
       queryClient.prefetchQuery({ queryKey: Q.etf("kr", "popular"),          queryFn: () => fetchers.etf("kr", "popular")          });
+      // 뉴스 탭
+      queryClient.prefetchQuery({ queryKey: Q.news(), queryFn: fetchers.news, staleTime: 5 * 60 * 1000 });
       // 관심 탭
       if (Object.keys(_WL_PARAMS).length > 0) {
         queryClient.prefetchQuery({ queryKey: Q.watchlist(_KR_TICKERS.join(","), _US_TICKERS.join(",")), queryFn: () => fetchers.watchlist(_WL_PARAMS) });

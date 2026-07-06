@@ -206,9 +206,11 @@ export interface AiBriefingData {
 
 // ── /news ─────────────────────────────────────────────────────────────────────
 export interface NewsItem {
-  title:  string;
-  link:   string;
-  source: string;
+  title:     string;
+  link:      string;
+  source:    string;
+  market:    "KR" | "US";
+  published: string | null;
 }
 
 export interface NewsData {

@@ -3,6 +3,7 @@ import Card from "./ui/Card";
 import {
   ChartBarIcon,
   TrendingUpIcon,
+  NewspaperIcon,
   BookmarkIcon,
   SparklesIcon,
   MagnifyingGlassIcon,
@@ -55,6 +56,21 @@ const SECTIONS: Section[] = [
       {
         q: "AI 차트 코멘트는 뭐예요?",
         a: "종목 차트를 보면서 AI에게 분석을 요청할 수 있어요.\n\n최근 가격 흐름, 고점·저점, 등락률을 바탕으로 AI가 간단한 코멘트를 달아줘요. 투자 추천이 아닌 참고용이에요.",
+      },
+    ],
+  },
+  {
+    id: "news",
+    title: "뉴스 탭",
+    icon: NewspaperIcon,
+    items: [
+      {
+        q: "뉴스는 어디서 가져와요?",
+        a: "연합뉴스·머니투데이·Yahoo Finance의 증시 관련 기사를 모아서 보여줘요.\n\n30분마다 갱신되고, 최신 기사부터 나열돼요. 제목을 누르면 원문 기사로 이동해요.",
+      },
+      {
+        q: "국내/해외 필터는 뭐예요?",
+        a: "전체·국내·해외 버튼으로 원하는 시장의 뉴스만 골라 볼 수 있어요.\n\n국내는 연합뉴스·머니투데이, 해외는 Yahoo Finance 기사예요.",
       },
     ],
   },

@@ -7,7 +7,7 @@ import yfinance as yf
 import httpx
 import pandas as pd
 import FinanceDataReader as fdr
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as _timezone
 try:
     from pykrx import stock as _krx
     _HAS_PYKRX = True
@@ -1717,19 +1717,15 @@ Rules:
     return result
 
 
-@app.get("/news")
-def get_news():
-    cache_key = "news"
-    now = time.time()
-    entry = _cache.get(cache_key)
-    if entry and now - entry["ts"] < 1800:
-        return entry["data"]
+_NEWS_TTL = 300  # 5분 — 뉴스 탭 특성상 신선도가 중요, SWR이라 사용자 대기는 없음
 
+
+def _fetch_news() -> dict:
     # 경제·증권 RSS (2026-07 기준 동작 확인 — 서울경제/조선비즈/이데일리/한경 RSS는 폐지됨)
     FEEDS = [
-        ("https://www.yna.co.kr/rss/economy.xml",   "연합뉴스"),
-        ("https://rss.mt.co.kr/mt_news.xml",        "머니투데이"),
-        ("https://finance.yahoo.com/news/rssindex", "Yahoo Finance"),
+        ("https://www.yna.co.kr/rss/economy.xml",   "연합뉴스",      "KR"),
+        ("https://rss.mt.co.kr/mt_news.xml",        "머니투데이",    "KR"),
+        ("https://finance.yahoo.com/news/rssindex", "Yahoo Finance", "US"),
     ]
 
     # 주식 핵심 키워드 — 반드시 하나 이상 포함
@@ -1737,11 +1733,26 @@ def get_news():
         "주가", "코스피", "코스닥", "증시", "주식", "증권",
         "ETF", "나스닥", "S&P", "다우", "선물", "공매도",
         "시총", "종목", "배당", "공모주", "상장", "장세",
+        "특징주", "급등", "급락", "상한가", "하한가", "신고가", "IPO",
     ]
 
+    from email.utils import parsedate_to_datetime
+
+    def _parse_pubdate(text: str):
+        """RFC822(연합·머투)와 ISO 8601(Yahoo) 형식 모두 처리."""
+        text = text.strip()
+        try:
+            return parsedate_to_datetime(text)
+        except Exception:
+            pass
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except Exception:
+            return None
+
     items: list[dict] = []
-    MAX_PER_FEED = 6
-    for url, source in FEEDS:
+    MAX_PER_FEED = 10
+    for url, source, market in FEEDS:
         try:
             resp = httpx.get(url, timeout=6, follow_redirects=True,
                              headers={"User-Agent": "Mozilla/5.0"})
@@ -1758,17 +1769,49 @@ def get_news():
                 link  = (link_el.text  or "").strip() if link_el  is not None else ""
                 # 일부 피드(머니투데이 등)는 제목을 이중 이스케이프해서 내려줌 (&#039; &quot;)
                 title = _html.unescape(title)
+                published = None
+                pub_el = el.find("pubDate")
+                if pub_el is not None and pub_el.text:
+                    dt = _parse_pubdate(pub_el.text)
+                    if dt is not None:
+                        try:
+                            published = dt.astimezone(_timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        except Exception:
+                            pass
                 is_stock = source == "Yahoo Finance" or any(kw in title for kw in STOCK_KW)
                 if title and is_stock:
-                    items.append({"title": title, "link": link, "source": source})
+                    items.append({"title": title, "link": link, "source": source,
+                                  "market": market, "published": published})
                     picked += 1
         except Exception:
             pass
 
-    result = {"items": items}
-    if items:
-        _cache[cache_key] = {"data": result, "ts": now}
-    return result
+    # 소스 구분 없이 최신순 정렬 (발행 시각 없는 항목은 뒤로)
+    items.sort(key=lambda x: x.get("published") or "", reverse=True)
+
+    if not items:
+        # 전 피드 실패 — 예외를 올려 SWR이 기존 캐시를 유지하게 함
+        raise RuntimeError("모든 뉴스 피드 수집 실패")
+    return {"items": items}
+
+
+@app.get("/news")
+def get_news():
+    cache_key = "news"
+    now = time.time()
+    entry = _cache.get(cache_key)
+    if entry:
+        # SWR: 만료돼도 기존 목록을 즉시 반환하고 백그라운드에서 갱신
+        if now - entry["ts"] >= _NEWS_TTL:
+            _refresh_in_background(cache_key, _fetch_news)
+        return entry["data"]
+
+    try:
+        data = _fetch_news()
+    except Exception:
+        return {"items": []}
+    _cache[cache_key] = {"data": data, "ts": now}
+    return data
 
 
 def _generate_briefing() -> dict:
@@ -2136,6 +2179,8 @@ _WARM_TARGETS = [
     ("forex",           lambda: get_forex()),
     ("ranking",         lambda: get_stock_ranking(type="amount", market="ALL", limit=20)),
     ("etf",             lambda: get_etf(type="popular", limit=20)),
+    # 뉴스 탭 — 5분 TTL + SWR이라 워머가 돌면 사용자는 항상 신선한 목록을 즉시 받음
+    ("news",            lambda: get_news()),
 ]
 
 # AI 브리핑도 미리 생성해 사용자가 API 호출(수 초)을 기다리지 않게 함.

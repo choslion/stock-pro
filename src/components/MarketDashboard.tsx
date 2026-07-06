@@ -10,7 +10,6 @@ import AiBriefing from "./AiBriefing";
 import Card from "./ui/Card";
 import { ChartBarIcon } from "./ui/Icons";
 const ThemeSectors = lazy(() => import("./ThemeSectors"));
-const GetNews      = lazy(() => import("./GetNews"));
 
 type Tab = "kr" | "us" | "theme";
 
@@ -66,12 +65,6 @@ export default function MarketDashboard() {
           <ThemeSectors />
         </Suspense>
       )}
-
-      <div className="mt-6">
-        <Suspense fallback={null}>
-          <GetNews />
-        </Suspense>
-      </div>
     </div>
   );
 }
