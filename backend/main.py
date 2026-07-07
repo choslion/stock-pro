@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import yfinance as yf
@@ -25,6 +25,21 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 app = FastAPI()
+
+# 처리되지 않은 예외를 JSON 500으로 변환.
+# CORS보다 먼저(=안쪽에) 등록해야 이 응답에도 CORS 헤더가 붙는다 —
+# 헤더 없는 500은 브라우저가 막아서 프론트에 "네트워크 오류"로 잘못 표기됨.
+@app.middleware("http")
+async def _catch_unhandled(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "서버 내부 오류가 발생했어요. 잠시 후 다시 시도해 주세요."},
+        )
 
 app.add_middleware(
     CORSMiddleware,
@@ -134,10 +149,11 @@ def _fgi_from_local() -> dict:
     """CNN API 불가 시 VIX + S&P500으로 시장 심리 지수 추정"""
     vix_val, _ = fetch_vix_latest()
     sp_hist = yf.Ticker("^GSPC").history(period="1y")
-    if sp_hist.empty:
+    sp_close = sp_hist["Close"].dropna() if not sp_hist.empty else sp_hist
+    if sp_close.empty:
         raise HTTPException(503, "시장 데이터를 가져올 수 없습니다.")
-    current = float(sp_hist["Close"].iloc[-1])
-    ma200 = float(sp_hist["Close"].tail(200).mean())
+    current = float(sp_close.iloc[-1])
+    ma200 = float(sp_close.tail(200).mean())
     deviation = (current - ma200) / ma200 * 100
 
     vix_score = max(0.0, min(100.0, (40 - vix_val) / 30 * 100))
@@ -171,30 +187,31 @@ def fetch_fgi() -> dict:
 
 def fetch_vix_latest() -> tuple[float, str]:
     hist = yf.Ticker("^VIX").history(period="5d")
-    if hist.empty:
+    closes = hist["Close"].dropna() if not hist.empty else hist
+    if closes.empty:
         raise HTTPException(status_code=503, detail="VIX 데이터를 가져올 수 없습니다.")
-    row = hist.iloc[-1]
-    return float(row["Close"]), row.name.strftime("%Y-%m-%d")
+    return float(closes.iloc[-1]), closes.index[-1].strftime("%Y-%m-%d")
 
 
 @app.get("/kr-score")
 def get_kr_score():
     """KOSPI 실현변동성 + 추세 + 업종폭으로 국내 시장 심리 점수(0~100) 계산"""
     def fetch():
-        # 1. KOSPI 3개월 히스토리
+        # 1. KOSPI 3개월 히스토리 (장외 시간의 NaN 행 제거)
         hist = yf.Ticker("^KS11").history(period="3mo")
-        if hist.empty:
+        closes = hist["Close"].dropna() if not hist.empty else hist
+        if closes.empty:
             raise HTTPException(503, "KOSPI 데이터를 가져올 수 없습니다.")
 
-        current = float(hist["Close"].iloc[-1])
+        current = float(closes.iloc[-1])
 
         # 실현변동성 (20일 연환산) — VKOSPI 근사값으로 사용
-        daily_ret = hist["Close"].pct_change().dropna()
+        daily_ret = closes.pct_change().dropna()
         realized_vol = float(daily_ret.tail(20).std()) * (252 ** 0.5) * 100
         vol_score = max(0.0, min(100.0, (35 - realized_vol) / 25 * 100))
 
         # 추세 점수 (현재 vs 20일 이동평균)
-        ma20 = float(hist["Close"].tail(20).mean())
+        ma20 = float(closes.tail(20).mean())
         deviation = (current - ma20) / ma20 * 100
         momentum_score = max(0.0, min(100.0, deviation / 5 * 50 + 50))
 
@@ -381,17 +398,19 @@ def get_kospi():
         for key, ticker in [("kospi", "^KS11"), ("kosdaq", "^KQ11")]:
             try:
                 hist = yf.Ticker(ticker).history(period="5d")
-                if hist.empty:
+                # 장외 시간엔 Yahoo가 다음 세션용 NaN 행을 끼워 넣음 → 제거 후 마지막 종가 사용
+                closes = hist["Close"].dropna() if not hist.empty else hist
+                if closes.empty:
                     result[key] = None
                     continue
-                current = float(hist["Close"].iloc[-1])
-                prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else current
+                current = float(closes.iloc[-1])
+                prev = float(closes.iloc[-2]) if len(closes) >= 2 else current
                 change = current - prev
                 result[key] = {
                     "value": round(current, 2),
                     "change": round(change, 2),
                     "change_pct": round(change / prev * 100, 2),
-                    "date": hist.index[-1].strftime("%Y-%m-%d"),
+                    "date": closes.index[-1].strftime("%Y-%m-%d"),
                 }
             except Exception:
                 result[key] = None

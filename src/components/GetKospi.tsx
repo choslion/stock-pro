@@ -32,7 +32,7 @@ function IndexBlock({ label, data }: IndexBlockProps) {
           ({isPositive ? "+" : ""}{data.change_pct.toFixed(2)}%)
         </span>
       </p>
-      <p className="text-[11px] text-gray-600 mt-1">{data.date}</p>
+      <p className="text-[11px] text-gray-600 mt-1">{data.date} 기준</p>
     </div>
   );
 }
