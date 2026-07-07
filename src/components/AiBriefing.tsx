@@ -160,7 +160,7 @@ export default function AiBriefing() {
                 <ul className="mt-3 space-y-2">
                   {data!.points!.map((p, i) => (
                     <li key={i} className="flex items-start gap-2">
-                      <span className="shrink-0 mt-0.5 whitespace-nowrap text-[11px] font-semibold px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-400">
+                      <span className="shrink-0 mt-0.5 whitespace-nowrap min-w-[4.5rem] text-center text-[11px] font-semibold px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-400">
                         {p.label}
                       </span>
                       <span className="text-sm text-gray-300 leading-relaxed">
