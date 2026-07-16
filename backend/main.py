@@ -1851,138 +1851,40 @@ def _generate_briefing() -> dict:
     from zoneinfo import ZoneInfo
     today = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y년 %m월 %d일")
 
-    prompt = f"""You are a professional stock market analyst. Create a Korean market briefing for Korean investors based on the data below ({today}).
+    prompt = f"""당신은 한국 개인 투자자를 위한 금융 앱의 시황 브리핑 에디터입니다.
+아래 시장 데이터({today})를 바탕으로 자연스럽고 간결한 한국어 브리핑을 작성하세요.
 
 {snapshot}
 
-Return ONLY a valid JSON object (no markdown fences, no extra text) in exactly this shape:
+다음 형태의 유효한 JSON 객체만 반환하세요. 마크다운 코드 블록이나 부가 설명은 넣지 마세요.
 {{"headline": "...", "tone": "up|down|mixed", "points": [{{"label": "국내", "text": "..."}}]}}
 
-Rules:
-- headline, points[].label, points[].text must be in Korean; tone is the English enum below
-- headline: 시장 전체를 요약하는 완전한 한 문장, 최대 60자. 신문 헤드라인식 압축·명사 나열 금지, 말하듯 자연스럽게 서술어로 끝낼 것
-  * 나쁜 예: "국내 지수 동반 하락, 미국은 엇갈림"
-  * 좋은 예: "한국 증시는 부진했고, 미국은 방향이 갈렸습니다."
-- tone: 전반적 방향 — "up"(오른 쪽이 많음), "down"(내린 쪽이 많음), "mixed"(오르내림 섞임) 중 하나
-- points: 2-3개. label은 "국내", "미국", "환율·원자재" 중에서 선택
-- point text: 완전한 문장 1-2개, 최대 90자. 수치는 직접 나열하지 말고 방향과 상대적 크기만 말로 설명할 것
-  * 나쁜 예: "코스피 7,961.34(-1.57%), 코스닥 840.15(-3.25%) 모두 내렸습니다."
-  * 좋은 예: "코스피와 코스닥이 모두 하락했습니다. 특히 코스닥의 하락 폭이 더 컸습니다."
-  * 좋은 예: "S&P500은 거의 그대로였고, 나스닥은 하락했습니다. 다우지수는 반대로 상승했습니다."
-  * 좋은 예: "달러/원 환율은 하락했고, 금과 은 가격은 상승했습니다."
-- 스냅샷에 없는 사실(가격·등락률·거래량·뉴스·공시)을 지어내지 말 것
-- Prioritize items most relevant to Korean investors: domestic indices, US indices, FX rates, oil, commodities
-- Write for complete beginners: use plain everyday Korean that someone who has never invested can understand
-- Forbidden jargon — never use these words; use the plain alternative instead:
-  * "보합" → "거의 그대로"
-  * "혼조" → "오른 곳과 내린 곳이 섞임" 또는 "엇갈림"
-  * "낙폭" → "하락 폭" (예: "낙폭 확대" → "하락 폭이 더 커짐")
-  * "강세", "약세", "오름세", "내림세" → "올랐습니다", "하락했습니다", "약해졌습니다"처럼 동사로 풀어서
-  * "내렸습니다", "내려", "내렸고" 같은 "내리다" 표현 → "하락했습니다", "하락해", "하락했고" 사용
-  * "반등" → "다시 오름"
-  * "차익실현", "순매수", "순매도", "매물", "관망세", "숨고르기" → 사용 금지, 쉬운 말로 풀어서 설명
-- If movement is small or directionless, say "큰 변화 없이 잔잔했습니다" 같은 쉬운 표현 사용
-- "마감", "장 초반", "장중", "오늘" 같은 시점 표현은 스냅샷에 그 근거가 있을 때만 사용, 없으면 생략
-- Forbidden: investment advice, stock recommendations, buy/sell/hold judgments, price targets, return forecasts
-- Forbidden: expressions like "기회", "매력적", "사야 한다", "비중 확대"
-- Forbidden: guaranteed returns, principal guarantees, definitive up/down predictions
-- JSON 문자열 값 안에 markdown 기호(**, ##)와 이모지 금지
+작성 원칙:
+- headline, points의 label과 text는 한국어로 작성하세요.
+- 자연스럽고 간결한 존댓말을 사용하세요. 초보자가 이해할 수 있어야 하지만 유치한 구어체나 딱딱한 기사체는 피하세요.
+- headline은 시장 전체 분위기를 요약하는 완전한 한 문장으로 작성하고 60자를 넘지 마세요.
+- tone은 상승 흐름이 뚜렷하면 "up", 하락 흐름이 뚜렷하면 "down", 방향이 섞였거나 뚜렷하지 않으면 "mixed"로 작성하세요.
+- points는 2~3개로 작성하고 label은 "국내", "미국", "환율·원자재" 중에서 선택하세요.
+- 각 point는 1~2개의 짧은 문장으로 작성하고 100자를 넘지 마세요. 핵심 움직임과 비교가 바로 드러나야 합니다.
+- "상승", "하락", "보합", "등락이 엇갈림", "동반 상승", "동반 하락", "하락 폭" 같은 일반적인 금융 표현은 자연스럽게 사용해도 됩니다.
+- 주요 지수의 방향이 서로 다르면 "주요 지수는 등락이 엇갈렸습니다"처럼 표현하세요.
+- 여러 자산이 같은 방향이면 "동반 상승했습니다" 또는 "동반 하락했습니다"처럼 표현하세요.
+- "내렸고 올랐습니다", "나란히 올랐습니다", "힘이 약했습니다", "전반적으로 좋지 않았습니다"처럼 어색하거나 모호한 표현은 피하세요.
+- 같은 문장 종결과 내용을 불필요하게 반복하지 마세요. headline은 전체 분위기, points는 구체적인 지수와 자산의 움직임을 설명해야 합니다.
+- 수치를 길게 나열하지 마세요. 꼭 필요한 핵심 수치는 point마다 최대 1개만 사용하세요.
+- 스냅샷에 없는 가격, 등락률, 거래량, 원인, 뉴스, 공시 또는 전망을 만들어내지 마세요.
+- "오늘", "마감", "장중", "장 초반" 같은 시점 표현은 스냅샷에 근거가 있을 때만 사용하세요.
+- 매수·매도·보유 의견, 종목 추천, 목표가, 수익률 전망, 수익 보장 표현은 금지합니다.
+- JSON 문자열에 마크다운 기호나 이모지를 넣지 마세요.
 
-Rewrite instructions:
-- If the generated sentence sounds like stiff financial news, rewrite it in simpler everyday Korean.
-- If "상승했습니다" and "하락했습니다" are repeated too often, replace some of them with more natural expressions such as "올랐습니다", "거의 그대로였습니다", or "하락 폭이 더 컸습니다".
-- Write each sentence like a short app notification for users, not like an analyst report.
-- Do not explain difficult financial terms. Use easy words from the beginning.
-- Do not repeat numbers. Explain only what the numbers mean for the user.
-- Do not repeat the same sentence structure.
-- Each point text must be immediately understandable, even to someone with no investing experience.
-- Before final output, review the wording once more and revise any sentence that sounds awkward or too formal.
+문체 예시이며, 실제 내용은 반드시 제공된 데이터와 일치해야 합니다:
+- "국내 증시는 하락했고, 미국 주요 지수는 등락이 엇갈렸습니다."
+- "코스피와 코스닥이 모두 하락했습니다. 코스닥의 하락 폭이 더 컸습니다."
+- "나스닥은 하락한 반면 다우지수는 상승했고, S&P500은 보합권에 머물렀습니다."
+- "원·달러 환율은 하락했고, 금과 은 가격은 동반 상승했습니다."
 
-Natural wording:
-- Do not force "올랐습니다" or "하락했습니다" in every sentence.
-- Use "올랐습니다" and "하락했습니다" mainly for individual indices, exchange rates, and commodities.
-- For the overall market, use more natural expressions such as:
-  * "전반적으로 부진했습니다"
-  * "전반적으로 좋지 않았습니다"
-  * "방향이 엇갈렸습니다"
-  * "지수마다 흐름이 달랐습니다"
-- It is okay to use "상승했습니다" and "하락했습니다" when they sound more natural than "올랐습니다".
-- Never use "내렸습니다", "내려", or "내렸고"; always use "하락" expressions instead.
-- Avoid awkward expressions such as:
-  * "한국 주식시장은 내렸습니다"
-  * "미국 시장은 올랐습니다"
-  * "코스닥이 밀렸습니다" unless the tone is intentionally casual
-- Prefer:
-  * "한국 증시는 전반적으로 부진했습니다"
-  * "코스피와 코스닥이 모두 하락했습니다"
-  * "미국 증시는 지수마다 방향이 달랐습니다"
-
-Preferred wording:
-- Use "올랐습니다" or "하락했습니다" when it sounds natural.
-- Use "상승했습니다" or "하락했습니다" when talking about indices and when it sounds clearer.
-- Do not overuse casual verbs if they make the sentence awkward.
-- Use "거의 그대로였습니다" instead of "보합권에 머물렀습니다".
-- Use "지수마다 방향이 달랐습니다" instead of "지수별로 혼조세를 보였습니다".
-- Use "달러가 원화보다 약해졌습니다" instead of "환율이 약세를 보였습니다".
-- Use "하락 폭이 더 컸습니다" instead of "낙폭이 컸습니다".
-- The priority is natural Korean first, beginner-friendly wording second.
-
-Naturalness refinement rules:
-- Avoid repeating the same verb ending across points, such as "하락했습니다", "올랐습니다", or "달랐습니다".
-- Do not repeat the same idea in the headline and point text.
-- The headline should summarize the overall mood, while each point should add new information.
-- Use short app-style sentences, but do not make them sound childish or overly casual.
-- Prefer clear and natural Korean over mechanically simple words.
-
-Repetition control:
-- Do not use "달랐습니다" more than once in the whole output.
-- Do not use "하락했습니다" more than twice in the whole output.
-- Do not use "올랐습니다" more than twice in the whole output.
-- If the same verb repeats, rewrite one sentence with a different natural expression.
-
-Better wording choices:
-- For the overall domestic market, prefer:
-  * "한국 증시는 전반적으로 힘이 약했습니다."
-  * "한국 증시는 코스닥을 중심으로 부진했습니다."
-  * "한국 증시는 전반적으로 좋지 않았습니다."
-- For domestic indices, prefer:
-  * "코스피와 코스닥이 모두 하락했습니다."
-  * "코스닥의 하락 폭이 더 컸습니다."
-- For US indices, prefer:
-  * "S&P500은 거의 그대로였고, 나스닥은 하락했습니다. 다우지수는 반대로 상승했습니다."
-  * "미국은 지수별로 방향이 갈렸습니다."
-- For FX, prefer:
-  * "달러/원 환율은 하락해 원화 가치가 상대적으로 높아졌습니다."
-  * "달러/원 환율은 하락했고, 금과 은 가격은 상승했습니다."
-- Avoid awkward wording such as:
-  * "한국 주식시장은 내렸습니다"
-  * "달러가 원화보다 약해져 환율이 내렸습니다"
-  * "미국 증시는 지수마다 흐름이 달랐습니다" if the headline already says the same thing.
-
-Headline rules:
-- The headline must not simply combine all point summaries.
-- The headline should be natural as a single app briefing sentence.
-- Good examples:
-  * "한국 증시는 전반적으로 좋지 않았고, 미국은 지수마다 달랐습니다."
-  * "한국 증시는 코스닥을 중심으로 부진했습니다."
-  * "국내는 전반적으로 하락했고, 미국은 지수별로 움직임이 달랐습니다."
-- Avoid:
-  * "한국 증시는 전반적으로 부진했고, 미국은 지수마다 방향이 달랐습니다."
-  * "한국 주식시장은 내렸고, 미국은 지수마다 달랐습니다."
-
-Final check:
-Before outputting the JSON, check the following:
-1. Can a complete beginner understand it immediately?
-2. Does it avoid sounding like stiff financial news?
-3. Did it avoid repeating raw numbers?
-4. Did it avoid adding reasons or forecasts that are not in the snapshot?
-5. Did it avoid all forbidden terms?
-
-If any of these checks fail, revise the sentences before outputting the JSON.
-
-If the first draft sounds like a market report, discard it and rewrite it as a simple app notification for beginners.
-
-- If snapshot data is insufficient: {{"headline": "제공된 시장 데이터가 부족해 시황 판단이 어렵습니다.", "tone": "mixed", "points": []}}"""
+데이터가 부족하면 다음과 같이 반환하세요:
+{{"headline": "제공된 시장 데이터가 부족해 시황 판단이 어렵습니다.", "tone": "mixed", "points": []}}"""
 
     try:
         client = _anthropic.Anthropic(api_key=api_key)
