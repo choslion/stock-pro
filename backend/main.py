@@ -114,6 +114,35 @@ def _get_cached(key: str, fetch_fn):
     return data
 
 
+_raw_locks: dict = {}
+_raw_locks_guard = threading.Lock()
+
+
+def _cached_raw(key: str, fetch_fn):
+    """_get_cached와 동일한 SWR 캐시지만 데이터를 가공 없이 그대로 반환한다.
+
+    여러 엔드포인트·필터가 공유하는 원본 데이터(KRX 시세표, yf 일괄 시세 등)를
+    한 번만 수집하기 위한 용도. 콜드 상태에서 동시 요청이 몰려도 키별 락으로
+    수집이 1회만 실행된다.
+    """
+    now = time.time()
+    entry = _cache.get(key)
+    if entry and now - entry["ts"] < _CACHE_HARD_TTL:
+        if now - entry["ts"] >= _CACHE_TTL:
+            _refresh_in_background(key, fetch_fn)
+        return entry["data"]
+
+    with _raw_locks_guard:
+        lock = _raw_locks.setdefault(key, threading.Lock())
+    with lock:
+        entry = _cache.get(key)
+        if entry and time.time() - entry["ts"] < _CACHE_HARD_TTL:
+            return entry["data"]
+        data = fetch_fn()
+        _cache[key] = {"data": data, "ts": time.time()}
+        return data
+
+
 def _batch_close(tickers: list, period: str = "5d") -> dict:
     """여러 티커를 yf.download 한 번으로 일괄 수집해 {ticker: 정제된 Close Series}를 반환.
 
@@ -533,6 +562,11 @@ def get_score():
 # ── 국내 주식 신규 엔드포인트 ──────────────────────────────────────
 
 def _get_listing(market: str) -> pd.DataFrame:
+    """국내 주식 목록 — 필터/엔드포인트와 무관하게 시장별 1회만 수집 (공유 캐시)."""
+    return _cached_raw(f"kr_listing_{market}", lambda: _fetch_listing(market))
+
+
+def _fetch_listing(market: str) -> pd.DataFrame:
     mkt = {"ALL": "KRX", "KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ"}.get(market, "KRX")
     df = fdr.StockListing(mkt)
 
@@ -639,6 +673,7 @@ def get_investor_trends(market: str = Query("KOSPI")):
         if df.empty:
             raise HTTPException(503, "데이터를 가져올 수 없습니다.")
 
+        df = df.copy()  # 컬럼을 제자리 수정하므로 공유 캐시 원본 보호
         for col in ["ForeignRatio", "Amount"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -689,6 +724,10 @@ from kr_name_map import KR_NAME_TO_TICKER as _KR_NAME_TO_TICKER
 
 
 def _get_usd_krw() -> float:
+    return _cached_raw("usd_krw", _fetch_usd_krw)
+
+
+def _fetch_usd_krw() -> float:
     hist = yf.Ticker("USDKRW=X").history(period="1d")
     if hist.empty:
         return 1380.0
@@ -796,7 +835,7 @@ def _fetch_etf_kr_df() -> pd.DataFrame:
 @app.get("/etf")
 def get_etf(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
-        df = _fetch_etf_kr_df()
+        df = _cached_raw("etf_kr_df", _fetch_etf_kr_df)
         if df.empty:
             raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
         # 순수 국내 ETF: 해외 추종 제외
@@ -856,7 +895,7 @@ def _etf_kr_rows(df, type: str, limit: int):
 @app.get("/etf-kr-overseas")
 def get_etf_kr_overseas(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
-        df = _fetch_etf_kr_df()
+        df = _cached_raw("etf_kr_df", _fetch_etf_kr_df)
         if df.empty:
             raise HTTPException(503, "ETF 데이터를 가져올 수 없습니다.")
         # 해외 추종 ETF만 필터
@@ -896,42 +935,49 @@ _US_ETFS = [
 ]
 
 
+def _fetch_etf_us_raw() -> list:
+    """미국 ETF 시세를 yf.download 한 번으로 수집한 원본 행 목록 (정렬 전).
+    필터(type)와 무관하므로 공유 캐시 대상."""
+    tickers  = [t for t, _ in _US_ETFS]
+    name_map = {t: n for t, n in _US_ETFS}
+
+    raw = yf.download(tickers, period="2d", auto_adjust=True, progress=False)
+    if raw.empty:
+        raise HTTPException(503, "미국 ETF 데이터를 가져올 수 없습니다.")
+
+    close  = raw["Close"]
+    volume = raw["Volume"]
+
+    rows = []
+    for ticker in tickers:
+        try:
+            c = close[ticker].dropna()
+            v = volume[ticker].dropna()
+            if len(c) < 1:
+                continue
+            price = float(c.iloc[-1])
+            vol   = float(v.iloc[-1]) if len(v) >= 1 else 0.0
+            chg   = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
+            rows.append({
+                "ticker": ticker,
+                "name": name_map[ticker],
+                "price": round(price, 2),
+                "change_rate": chg,
+                "volume": int(vol),
+                "amount": int(price * vol),
+            })
+        except Exception:
+            continue
+
+    if not rows:
+        raise HTTPException(503, "미국 ETF 데이터를 가져올 수 없습니다.")
+    return rows
+
+
 @app.get("/etf-us")
 def get_etf_us(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
-        tickers  = [t for t, _ in _US_ETFS]
-        name_map = {t: n for t, n in _US_ETFS}
-
-        raw = yf.download(tickers, period="2d", auto_adjust=True, progress=False)
-        if raw.empty:
-            raise HTTPException(503, "미국 ETF 데이터를 가져올 수 없습니다.")
-
-        close  = raw["Close"]
-        volume = raw["Volume"]
-
-        rows = []
-        for ticker in tickers:
-            try:
-                c = close[ticker].dropna()
-                v = volume[ticker].dropna()
-                if len(c) < 1:
-                    continue
-                price = float(c.iloc[-1])
-                vol   = float(v.iloc[-1]) if len(v) >= 1 else 0.0
-                chg   = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
-                rows.append({
-                    "ticker": ticker,
-                    "name": name_map[ticker],
-                    "price": round(price, 2),
-                    "change_rate": chg,
-                    "volume": int(vol),
-                    "amount": int(price * vol),
-                })
-            except Exception:
-                continue
-
-        if not rows:
-            raise HTTPException(503, "미국 ETF 데이터를 가져올 수 없습니다.")
+        rows = _cached_raw("etf_us_raw", _fetch_etf_us_raw)
 
         df = pd.DataFrame(rows)
         if type == "volume":
@@ -1210,44 +1256,52 @@ def get_theme_ranking(tickers: str = Query(...), limit: int = Query(10)):
     return data
 
 
+def _fetch_us_ranking_raw() -> dict:
+    """미국 주식 시세를 yf.download 한 번으로 수집한 원본 행 목록 (정렬 전).
+    필터(type)와 무관하므로 공유 캐시 대상."""
+    tickers = list(US_STOCKS.keys())
+    raw = yf.download(tickers, period="2d", auto_adjust=True, progress=False)
+    if raw.empty:
+        raise HTTPException(503, "해외 주식 데이터를 가져올 수 없습니다.")
+
+    usd_krw = _get_usd_krw()
+    close = raw["Close"]
+    volume = raw["Volume"]
+
+    rows = []
+    for ticker in tickers:
+        try:
+            c = close[ticker].dropna()
+            v = volume[ticker].dropna()
+            if len(c) < 1:
+                continue
+            price_usd = float(c.iloc[-1])
+            vol = float(v.iloc[-1]) if len(v) >= 1 else 0.0
+            chg = round((price_usd - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
+            rows.append({
+                "ticker": ticker,
+                "name": US_STOCKS[ticker],
+                "price_usd": round(float(price_usd), 2),
+                "price_krw": int(round(float(price_usd) * float(usd_krw))),
+                "change_rate": chg,
+                "volume": int(vol),
+                "amount": round(float(price_usd) * float(vol)),
+            })
+        except Exception:
+            continue
+
+    if not rows:
+        raise HTTPException(503, "해외 주식 데이터를 가져올 수 없습니다.")
+    return {"usd_krw": usd_krw, "rows": rows}
+
+
 @app.get("/stocks/us-ranking")
 def get_us_ranking(type: str = Query("amount"), limit: int = Query(20)):
     def fetch():
-        tickers = list(US_STOCKS.keys())
-        raw = yf.download(tickers, period="2d", auto_adjust=True, progress=False)
-        if raw.empty:
-            raise HTTPException(503, "해외 주식 데이터를 가져올 수 없습니다.")
+        base = _cached_raw("us_ranking_raw", _fetch_us_ranking_raw)
+        usd_krw = base["usd_krw"]
 
-        usd_krw = _get_usd_krw()
-        close = raw["Close"]
-        volume = raw["Volume"]
-
-        rows = []
-        for ticker in tickers:
-            try:
-                c = close[ticker].dropna()
-                v = volume[ticker].dropna()
-                if len(c) < 1:
-                    continue
-                price_usd = float(c.iloc[-1])
-                vol = float(v.iloc[-1]) if len(v) >= 1 else 0.0
-                chg = round((price_usd - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2) if len(c) >= 2 else 0.0
-                rows.append({
-                    "ticker": ticker,
-                    "name": US_STOCKS[ticker],
-                    "price_usd": round(float(price_usd), 2),
-                    "price_krw": int(round(float(price_usd) * float(usd_krw))),
-                    "change_rate": chg,
-                    "volume": int(vol),
-                    "amount": round(float(price_usd) * float(vol)),
-                })
-            except Exception:
-                continue
-
-        if not rows:
-            raise HTTPException(503, "해외 주식 데이터를 가져올 수 없습니다.")
-
-        df = pd.DataFrame(rows)
+        df = pd.DataFrame(base["rows"])
         if type == "volume":
             df = df.sort_values("volume", ascending=False)
         elif type == "rising":
