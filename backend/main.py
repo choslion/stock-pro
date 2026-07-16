@@ -1578,21 +1578,35 @@ def get_chart(
     ticker: str = Query(...),
     market: str = Query("US"),
     period: str = Query("1m"),
+    start_date: str | None = Query(None),
 ):
     import datetime as _dt
 
-    period_map = {"1w": "7d", "1m": "1mo", "3m": "3mo", "6m": "6mo", "1y": "1y"}
-    days_map   = {"1w": 10,   "1m": 40,    "3m": 100,   "6m": 200,   "1y": 380}
-    yf_period  = period_map.get(period, "1mo")
-    days       = days_map.get(period, 40)
+    period_map = {"1w": "7d", "1m": "1mo", "3m": "3mo", "6m": "6mo", "1y": "1y",
+                  "3y": "3y", "5y": "5y",  "10y": "10y"}
+    days_map   = {"1w": 10,   "1m": 40,    "3m": 100,   "6m": 200,   "1y": 380,
+                  "3y": 1130, "5y": 1870,  "10y": 3700}
+    yf_period = period_map.get(period, "1mo")
+    days      = days_map.get(period, 40)
 
-    cache_key = f"chart_{ticker}_{market}_{period}"
+    custom_start = None
+    if start_date:
+        try:
+            custom_start = _dt.date.fromisoformat(start_date)
+        except ValueError:
+            raise HTTPException(400, "start_date는 YYYY-MM-DD 형식이어야 합니다.")
+        if custom_start > _dt.date.today():
+            raise HTTPException(400, "start_date는 오늘보다 늦을 수 없습니다.")
+        if custom_start < _dt.date.today() - _dt.timedelta(days=365 * 30):
+            raise HTTPException(400, "최대 30년 전 데이터까지 조회할 수 있습니다.")
+
+    cache_key = f"chart_{ticker}_{market}_{period}_{start_date or ''}"
 
     def fetch():
         items = []
         if market == "KR":
             end   = _dt.date.today()
-            start = end - _dt.timedelta(days=days)
+            start = custom_start or (end - _dt.timedelta(days=days))
             df = fdr.DataReader(ticker, str(start), str(end))
             if df.empty:
                 return []
@@ -1601,13 +1615,29 @@ def get_chart(
                 if close is not None and pd.notna(close):
                     items.append({"time": str(idx.date()), "value": round(float(close), 2)})
         else:
-            hist = yf.Ticker(ticker).history(period=yf_period)
+            history_args = {
+                "auto_adjust": False,
+                "actions": False,
+            }
+            if custom_start:
+                # end는 exclusive이므로 오늘 데이터를 포함하도록 하루 뒤를 전달한다.
+                hist = yf.Ticker(ticker).history(
+                    start=str(custom_start),
+                    end=str(_dt.date.today() + _dt.timedelta(days=1)),
+                    **history_args,
+                )
+            else:
+                hist = yf.Ticker(ticker).history(period=yf_period, **history_args)
             if hist.empty:
                 return []
             for idx, row in hist.iterrows():
                 close = row.get("Close")
                 if close is not None and pd.notna(close):
                     items.append({"time": str(idx.date()), "value": round(float(close), 2)})
+        # 장기 기간은 포인트 수를 줄여 응답 크기 절약 (시작·끝 포인트는 유지)
+        if len(items) > 800:
+            step = len(items) // 750 + 1
+            items = items[:-1:step] + [items[-1]]
         return items
 
     entry = _cache.get(cache_key)

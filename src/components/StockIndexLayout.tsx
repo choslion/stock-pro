@@ -9,6 +9,7 @@ const Watchlist       = lazy(() => import("./Watchlist"));
 const HelpGuide       = lazy(() => import("./HelpGuide"));
 const AIChatSection   = lazy(() => import("./AIChatSection"));
 import SearchModal from "./SearchModal";
+import type { SearchResultItem } from "./SearchModal";
 import { ChartBarIcon, TrendingUpIcon, NewspaperIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { THEMES } from "../config/themes";
@@ -34,8 +35,8 @@ const NAV_TABS: NavTab[] = [
   { id: "market",    label: "시장", icon: ChartBarIcon   },
   { id: "chart",     label: "차트", icon: TrendingUpIcon },
   { id: "news",      label: "뉴스", icon: NewspaperIcon  },
-  { id: "watchlist", label: "관심", icon: BookmarkIcon   },
-  { id: "ai",        label: "AI",   icon: SparklesIcon   },
+  { id: "watchlist", label: "관심",   icon: BookmarkIcon  },
+  { id: "ai",        label: "AI",     icon: SparklesIcon  },
 ];
 
 const TAB_ANIM = {
@@ -45,13 +46,19 @@ const TAB_ANIM = {
   transition: { duration: 0.2, ease: "easeOut" as const },
 };
 
-function SectionContent({ activeTab }: { activeTab: TabId }) {
+function SectionContent({
+  activeTab,
+  initialWhatIfStock,
+}: {
+  activeTab: TabId;
+  initialWhatIfStock: SearchResultItem | null;
+}) {
   return (
     <Suspense fallback={null}>
       <AnimatePresence mode="wait">
         <MotionDiv key={activeTab} {...TAB_ANIM}>
           {activeTab === "market"    && <MarketDashboard />}
-          {activeTab === "chart"     && <MarketTrends />}
+          {activeTab === "chart"     && <MarketTrends initialWhatIfStock={initialWhatIfStock} />}
           {activeTab === "news"      && <NewsSection />}
           {activeTab === "watchlist" && <Watchlist />}
           {activeTab === "ai"        && <AIChatSection />}
@@ -138,6 +145,7 @@ export default function StockIndexDashboard() {
   const [activeTab, setActiveTab]   = useState<TabId>("market");
   const [showSearch, setShowSearch] = useState(false);
   const [showHelp, setShowHelp]     = useState(false);
+  const [whatIfStock, setWhatIfStock] = useState<SearchResultItem | null>(null);
   const queryClient = useQueryClient();
 
   // 백그라운드 프리패치 — 앱 로드 1.5초 후 모든 탭 데이터를 미리 수신
@@ -173,7 +181,16 @@ export default function StockIndexDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
+      {showSearch && (
+        <SearchModal
+          onClose={() => setShowSearch(false)}
+          onOpenWhatIf={(stock) => {
+            setWhatIfStock(stock);
+            setShowSearch(false);
+            setActiveTab("chart");
+          }}
+        />
+      )}
       <AnimatePresence>
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       </AnimatePresence>
@@ -248,7 +265,7 @@ export default function StockIndexDashboard() {
         <main className="flex-1 overflow-y-auto">
           <div className="p-6 xl:p-10">
             <div className="max-w-3xl mx-auto">
-              <SectionContent activeTab={activeTab} />
+              <SectionContent activeTab={activeTab} initialWhatIfStock={whatIfStock} />
             </div>
           </div>
         </main>
@@ -285,7 +302,7 @@ export default function StockIndexDashboard() {
 
         {/* 컨텐츠 */}
         <main className="p-4 pb-20 space-y-6">
-          <SectionContent activeTab={activeTab} />
+          <SectionContent activeTab={activeTab} initialWhatIfStock={whatIfStock} />
         </main>
 
         {/* 하단 탭바 */}

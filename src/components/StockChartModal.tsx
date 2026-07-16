@@ -3,6 +3,7 @@ import { createChart, LineSeries } from "lightweight-charts";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import axiosInstance from "../lib/axiosInstance";
 import Spin from "./ui/Spin";
+import { ClockFaceIcon } from "./ui/Icons";
 import type { SearchResultItem } from "./SearchModal";
 
 function SparkleIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -45,9 +46,10 @@ interface StockChartModalProps {
   stock:   SearchResultItem;
   onBack:  () => void;
   onClose: () => void;
+  onOpenWhatIf?: (stock: SearchResultItem) => void;
 }
 
-export default function StockChartModal({ stock, onBack, onClose }: StockChartModalProps) {
+export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf }: StockChartModalProps) {
   const [period, setPeriod]     = useState<Period>("1m");
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(false);
@@ -220,15 +222,28 @@ export default function StockChartModal({ stock, onBack, onClose }: StockChartMo
 
         {/* AI 분석 */}
         <div className="px-4 pb-4">
-          <button
-            onClick={handleAiAnalysis}
-            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl
-                       bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20
-                       text-blue-300 text-xs font-medium transition-colors"
-          >
-            <SparkleIcon className="w-3.5 h-3.5" />
-            AI 종목 분석
-          </button>
+          <div className={`grid gap-2 ${onOpenWhatIf ? "grid-cols-2" : "grid-cols-1"}`}>
+            <button
+              onClick={handleAiAnalysis}
+              className="flex items-center justify-center gap-1.5 py-2 rounded-xl
+                         bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20
+                         text-blue-300 text-xs font-medium transition-colors"
+            >
+              <SparkleIcon className="w-3.5 h-3.5" />
+              AI 종목 분석
+            </button>
+            {onOpenWhatIf && (
+              <button
+                onClick={() => onOpenWhatIf(stock)}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-xl
+                           bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20
+                           text-purple-300 text-xs font-medium transition-colors"
+              >
+                <ClockFaceIcon className="w-3.5 h-3.5" />
+                과거 투자 계산
+              </button>
+            )}
+          </div>
 
           {aiOpen && (
             <div className="mt-2 rounded-xl border border-blue-500/20 bg-gradient-to-br from-blue-950/40 to-slate-900/60 px-4 py-3">

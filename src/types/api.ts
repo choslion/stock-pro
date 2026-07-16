@@ -216,3 +216,13 @@ export interface NewsItem {
 export interface NewsData {
   items: NewsItem[];
 }
+
+// ── /chart ────────────────────────────────────────────────────────────────────
+export interface ChartPoint {
+  time:  string;
+  value: number;
+}
+
+export interface ChartData {
+  items: ChartPoint[];
+}

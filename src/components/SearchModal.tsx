@@ -78,10 +78,11 @@ function ResultItem({ item, onClick }: ResultItemProps) {
 }
 
 interface SearchModalProps {
-  onClose: () => void;
+  onClose:       () => void;
+  onOpenWhatIf?: (stock: SearchResultItem) => void;
 }
 
-export default function SearchModal({ onClose }: SearchModalProps) {
+export default function SearchModal({ onClose, onOpenWhatIf }: SearchModalProps) {
   const [query, setQuery]                   = useState("");
   const [results, setResults]               = useState<SearchResultItem[]>([]);
   const [loading, setLoading]               = useState(false);
@@ -236,6 +237,7 @@ export default function SearchModal({ onClose }: SearchModalProps) {
         stock={selectedStock}
         onBack={() => setSelectedStock(null)}
         onClose={onClose}
+        onOpenWhatIf={onOpenWhatIf}
       />
     )}
     </>
