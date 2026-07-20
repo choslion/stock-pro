@@ -1,6 +1,6 @@
 export default function Spin() {
   return (
-    <div className="flex items-center gap-2 text-sm text-sky-300 font-medium">
+    <div role="status" className="flex items-center gap-2 text-sm text-sky-300 font-medium">
       <svg
         className="animate-spin h-4 w-4 text-sky-400"
         viewBox="0 0 24 24"
