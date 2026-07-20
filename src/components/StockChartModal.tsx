@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { createChart, LineSeries } from "lightweight-charts";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import axiosInstance from "../lib/axiosInstance";
+import { useDialogFocus } from "../lib/useDialogFocus";
 import Spin from "./ui/Spin";
-import { ClockFaceIcon } from "./ui/Icons";
+import { ClockFaceIcon, CurrencyDollarIcon } from "./ui/Icons";
 import type { SearchResultItem } from "./SearchModal";
 
 function SparkleIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -47,9 +48,10 @@ interface StockChartModalProps {
   onBack:  () => void;
   onClose: () => void;
   onOpenWhatIf?: (stock: SearchResultItem) => void;
+  onOpenPaperTrade?: (stock: SearchResultItem) => void;
 }
 
-export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf }: StockChartModalProps) {
+export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf, onOpenPaperTrade }: StockChartModalProps) {
   const [period, setPeriod]     = useState<Period>("1m");
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(false);
@@ -58,6 +60,7 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf }
   const [aiOpen, setAiOpen]     = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef     = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
    
   const seriesRef    = useRef<ISeriesApi<"Line"> | null>(null);
@@ -119,6 +122,10 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf }
       .finally(() => setLoading(false));
   }, [stock.ticker, stock.market, period]);
 
+  /* ── 초점 트랩 + 닫힐 때 열었던 요소로 복귀 ── */
+  useDialogFocus(panelRef);
+  useEffect(() => { panelRef.current?.focus(); }, []);
+
   /* ── ESC 닫기 ── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onBack(); };
@@ -150,7 +157,12 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf }
       onClick={handleOverlay}
     >
       <div
-        className="w-full max-w-lg bg-gray-900 border border-gray-700/80 rounded-2xl shadow-2xl overflow-hidden"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${stock.name} 차트 상세`}
+        tabIndex={-1}
+        className="w-full max-w-lg bg-gray-900 border border-gray-700/80 rounded-2xl shadow-2xl overflow-hidden outline-none"
         style={{ animation: "slideDown 0.18s ease-out" }}
       >
         {/* 헤더 */}
@@ -222,6 +234,17 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf }
 
         {/* AI 분석 */}
         <div className="px-4 pb-4">
+          {onOpenPaperTrade && (
+            <button
+              onClick={() => onOpenPaperTrade(stock)}
+              className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl
+                         bg-blue-500 hover:bg-blue-400 py-2.5
+                         text-white text-xs font-semibold transition-colors"
+            >
+              <CurrencyDollarIcon className="w-3.5 h-3.5" />
+              가상 매수
+            </button>
+          )}
           <div className={`grid gap-2 ${onOpenWhatIf ? "grid-cols-2" : "grid-cols-1"}`}>
             <button
               onClick={handleAiAnalysis}

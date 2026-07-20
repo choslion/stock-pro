@@ -226,3 +226,35 @@ export interface ChartPoint {
 export interface ChartData {
   items: ChartPoint[];
 }
+
+// ── /portfolio/review ────────────────────────────────────────────────────────
+export interface PortfolioReviewHolding {
+  name: string;
+  ticker: string;
+  market: "KR" | "US";
+  return_rate: number;
+  reason: string;
+  horizon: string;
+}
+
+export interface PortfolioReviewTrade {
+  name: string;
+  reason: string;
+  thesis: string;
+  created_at: string;
+}
+
+export interface PortfolioReviewRequest {
+  portfolio_return: number;
+  kospi_return: number | null;
+  sp500_return: number | null;
+  holdings: PortfolioReviewHolding[];
+  recent_trades: PortfolioReviewTrade[];
+}
+
+export interface PortfolioReviewData {
+  summary: string;
+  best_decision: string;
+  repeated_mistake: string;
+  generated_at: string;
+}

@@ -6,7 +6,7 @@ import { MagnifyingGlassIcon, XMarkIcon, StarIcon, StarSolidIcon } from "./ui/Ic
 import { useWatchlistStore } from "../store/useWatchlistStore";
 import { useToastStore } from "../store/useToastStore";
 
-const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+import { useDialogFocus } from "../lib/useDialogFocus";
 
 export interface SearchResultItem {
   ticker:      string;
@@ -80,9 +80,10 @@ function ResultItem({ item, onClick }: ResultItemProps) {
 interface SearchModalProps {
   onClose:       () => void;
   onOpenWhatIf?: (stock: SearchResultItem) => void;
+  onOpenPaperTrade?: (stock: SearchResultItem) => void;
 }
 
-export default function SearchModal({ onClose, onOpenWhatIf }: SearchModalProps) {
+export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }: SearchModalProps) {
   const [query, setQuery]                   = useState("");
   const [results, setResults]               = useState<SearchResultItem[]>([]);
   const [loading, setLoading]               = useState(false);
@@ -94,50 +95,27 @@ export default function SearchModal({ onClose, onOpenWhatIf }: SearchModalProps)
   /* ── 오토포커스 ── */
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  /* ── 포커스 트랩 ── */
+  /* ── 포커스 트랩 + 닫힐 때 초점 복귀 (위에 차트 모달이 열리면 트랩 양보) ── */
+  useDialogFocus(panelRef, !selectedStock);
+
+  /* ── 모달 밖 pointerdown으로 초점이 빠져나가는 것 방지 ── */
   useEffect(() => {
+    if (selectedStock) return;
     const panel = panelRef.current;
     if (!panel) return;
-
-    const handleTab = (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return;
-      const nodes = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => !(n as HTMLButtonElement).disabled);
-      if (!nodes.length) { e.preventDefault(); return; }
-
-      const first = nodes[0];
-      const last  = nodes[nodes.length - 1];
-
-      if (e.shiftKey) {
-        if (document.activeElement === first || !panel.contains(document.activeElement)) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else {
-        if (document.activeElement === last || !panel.contains(document.activeElement)) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-
     const handleOverlayPointerDown = (e: PointerEvent) => {
       if (!panel.contains(e.target as Node)) e.preventDefault();
     };
-
-    window.addEventListener("keydown", handleTab);
     document.addEventListener("pointerdown", handleOverlayPointerDown);
-    return () => {
-      window.removeEventListener("keydown", handleTab);
-      document.removeEventListener("pointerdown", handleOverlayPointerDown);
-    };
-  }, []);
+    return () => document.removeEventListener("pointerdown", handleOverlayPointerDown);
+  }, [selectedStock]);
 
-  /* ── ESC 닫기 ── */
+  /* ── ESC 닫기 — 차트 모달이 열려 있으면 그쪽(뒤로가기)에 양보 ── */
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape" && !selectedStock) onClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, [onClose, selectedStock]);
 
   /* ── 검색 (400ms 디바운스) ── */
   useEffect(() => {
@@ -238,6 +216,7 @@ export default function SearchModal({ onClose, onOpenWhatIf }: SearchModalProps)
         onBack={() => setSelectedStock(null)}
         onClose={onClose}
         onOpenWhatIf={onOpenWhatIf}
+        onOpenPaperTrade={onOpenPaperTrade}
       />
     )}
     </>

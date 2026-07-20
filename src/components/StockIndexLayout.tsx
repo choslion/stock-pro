@@ -5,25 +5,18 @@ const MotionDiv = motion.div;
 const MarketDashboard = lazy(() => import("./MarketDashboard"));
 const MarketTrends    = lazy(() => import("./MarketTrends"));
 const NewsSection     = lazy(() => import("./NewsSection"));
-const Watchlist       = lazy(() => import("./Watchlist"));
+const PaperPortfolio  = lazy(() => import("./PaperPortfolio"));
 const HelpGuide       = lazy(() => import("./HelpGuide"));
 const AIChatSection   = lazy(() => import("./AIChatSection"));
 import SearchModal from "./SearchModal";
+import PaperTradeSheet from "./PaperTradeSheet";
 import type { SearchResultItem } from "./SearchModal";
-import { ChartBarIcon, TrendingUpIcon, NewspaperIcon, BookmarkIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
+import { ChartBarIcon, TrendingUpIcon, NewspaperIcon, CurrencyDollarIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
+import { useDialogFocus } from "../lib/useDialogFocus";
 import { THEMES } from "../config/themes";
-import { WATCHLIST } from "../config/watchlist";
 
-const _KR_LIST    = WATCHLIST.filter((w) => w.market === "KR");
-const _KR_TICKERS = _KR_LIST.map((w) => w.ticker);
-const _KR_NAMES   = _KR_LIST.map((w) => w.name);
-const _US_TICKERS = WATCHLIST.filter((w) => w.market === "US").map((w) => w.ticker);
-const _WL_PARAMS: Record<string, string> = {};
-if (_KR_TICKERS.length) { _WL_PARAMS.kr = _KR_TICKERS.join(","); _WL_PARAMS.kr_names = _KR_NAMES.join(","); }
-if (_US_TICKERS.length) _WL_PARAMS.us = _US_TICKERS.join(",");
-
-type TabId = "market" | "chart" | "news" | "watchlist" | "ai";
+type TabId = "market" | "chart" | "news" | "portfolio" | "ai";
 
 interface NavTab {
   id:    TabId;
@@ -35,7 +28,7 @@ const NAV_TABS: NavTab[] = [
   { id: "market",    label: "시장", icon: ChartBarIcon   },
   { id: "chart",     label: "차트", icon: TrendingUpIcon },
   { id: "news",      label: "뉴스", icon: NewspaperIcon  },
-  { id: "watchlist", label: "관심",   icon: BookmarkIcon  },
+  { id: "portfolio", label: "모의투자", icon: CurrencyDollarIcon },
   { id: "ai",        label: "AI",     icon: SparklesIcon  },
 ];
 
@@ -49,9 +42,11 @@ const TAB_ANIM = {
 function SectionContent({
   activeTab,
   initialWhatIfStock,
+  onOpenSearch,
 }: {
   activeTab: TabId;
   initialWhatIfStock: SearchResultItem | null;
+  onOpenSearch: () => void;
 }) {
   return (
     <Suspense fallback={null}>
@@ -60,7 +55,7 @@ function SectionContent({
           {activeTab === "market"    && <MarketDashboard />}
           {activeTab === "chart"     && <MarketTrends initialWhatIfStock={initialWhatIfStock} />}
           {activeTab === "news"      && <NewsSection />}
-          {activeTab === "watchlist" && <Watchlist />}
+          {activeTab === "portfolio" && <PaperPortfolio onOpenSearch={onOpenSearch} />}
           {activeTab === "ai"        && <AIChatSection />}
         </MotionDiv>
       </AnimatePresence>
@@ -73,7 +68,11 @@ const MotionPanel    = motion.div;
 
 function HelpModal({ onClose }: { onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const isDesktop = window.innerWidth >= 1024;
+
+  /* ── 초점 트랩 + 닫힐 때 열었던 요소로 복귀 ── */
+  useDialogFocus(panelRef);
 
   const panelAnim = isDesktop
     ? { initial: { opacity: 0, scale: 0.97 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.97 }, transition: { duration: 0.18, ease: "easeOut" as const } }
@@ -102,6 +101,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         transition={{ duration: 0.18 }}
       />
       <MotionPanel
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="help-modal-title"
@@ -146,6 +146,7 @@ export default function StockIndexDashboard() {
   const [showSearch, setShowSearch] = useState(false);
   const [showHelp, setShowHelp]     = useState(false);
   const [whatIfStock, setWhatIfStock] = useState<SearchResultItem | null>(null);
+  const [paperTradeStock, setPaperTradeStock] = useState<SearchResultItem | null>(null);
   const queryClient = useQueryClient();
 
   // 백그라운드 프리패치 — 앱 로드 1.5초 후 모든 탭 데이터를 미리 수신
@@ -171,10 +172,6 @@ export default function StockIndexDashboard() {
       queryClient.prefetchQuery({ queryKey: Q.etf("kr", "popular"),          queryFn: () => fetchers.etf("kr", "popular")          });
       // 뉴스 탭
       queryClient.prefetchQuery({ queryKey: Q.news(), queryFn: fetchers.news, staleTime: 5 * 60 * 1000 });
-      // 관심 탭
-      if (Object.keys(_WL_PARAMS).length > 0) {
-        queryClient.prefetchQuery({ queryKey: Q.watchlist(_KR_TICKERS.join(","), _US_TICKERS.join(",")), queryFn: () => fetchers.watchlist(_WL_PARAMS) });
-      }
     }, 1500);
     return () => clearTimeout(timer);
   }, [queryClient]);
@@ -189,6 +186,17 @@ export default function StockIndexDashboard() {
             setShowSearch(false);
             setActiveTab("chart");
           }}
+          onOpenPaperTrade={(stock) => {
+            setPaperTradeStock(stock);
+            setShowSearch(false);
+          }}
+        />
+      )}
+      {paperTradeStock && (
+        <PaperTradeSheet
+          stock={paperTradeStock}
+          onClose={() => setPaperTradeStock(null)}
+          onCompleted={() => setActiveTab("portfolio")}
         />
       )}
       <AnimatePresence>
@@ -265,7 +273,7 @@ export default function StockIndexDashboard() {
         <main className="flex-1 overflow-y-auto">
           <div className="p-6 xl:p-10">
             <div className="max-w-3xl mx-auto">
-              <SectionContent activeTab={activeTab} initialWhatIfStock={whatIfStock} />
+              <SectionContent activeTab={activeTab} initialWhatIfStock={whatIfStock} onOpenSearch={() => setShowSearch(true)} />
             </div>
           </div>
         </main>
@@ -302,7 +310,7 @@ export default function StockIndexDashboard() {
 
         {/* 컨텐츠 */}
         <main className="p-4 pb-20 space-y-6">
-          <SectionContent activeTab={activeTab} initialWhatIfStock={whatIfStock} />
+          <SectionContent activeTab={activeTab} initialWhatIfStock={whatIfStock} onOpenSearch={() => setShowSearch(true)} />
         </main>
 
         {/* 하단 탭바 */}

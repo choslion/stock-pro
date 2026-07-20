@@ -79,4 +79,49 @@ describe('SearchModal', () => {
     await userEvent.click(screen.getByText('Apple Inc.'))
     expect(screen.getByLabelText('검색으로 돌아가기')).toBeInTheDocument()
   })
+
+  it('차트 상세에서 가상 매수 흐름으로 진입한다', async () => {
+    const onOpenPaperTrade = vi.fn()
+    mockGet
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            { ticker: '005930', name: '삼성전자', market: 'KR', price: 80000, change_rate: 1.5 },
+          ],
+        },
+      })
+      .mockResolvedValue({ data: { items: [] } })
+
+    renderWithQuery(<SearchModal onClose={vi.fn()} onOpenPaperTrade={onOpenPaperTrade} />)
+    await userEvent.type(screen.getByRole('textbox'), '삼성')
+    await waitFor(() => expect(screen.getByText('삼성전자')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('삼성전자'))
+    await userEvent.click(screen.getByRole('button', { name: '가상 매수' }))
+
+    expect(onOpenPaperTrade).toHaveBeenCalledWith(expect.objectContaining({ ticker: '005930' }))
+  })
+
+  it('차트 모달이 열려 있을 때 ESC는 검색으로만 돌아가고 전체를 닫지 않는다', async () => {
+    const onClose = vi.fn()
+    mockGet
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            { ticker: 'AAPL', name: 'Apple Inc.', market: 'US', price: 200, change_rate: 0.8 },
+          ],
+        },
+      })
+      .mockResolvedValue({ data: { items: [] } })
+
+    renderWithQuery(<SearchModal onClose={onClose} />)
+    await userEvent.type(screen.getByRole('textbox'), 'AAPL')
+    await waitFor(() => expect(screen.getByText('Apple Inc.')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Apple Inc.'))
+    expect(screen.getByLabelText('검색으로 돌아가기')).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('검색으로 돌아가기')).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+  })
 })

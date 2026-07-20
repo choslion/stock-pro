@@ -4,6 +4,7 @@ import type {
   Sp500Data, CommoditiesData, ForexData, SectorsData, UsSectorsData,
   InvestorTrendsData, DomesticRankingData, OverseasRankingData,
   EtfData, WatchlistData, ThemeUsData, NewsData, ChartData,
+  PortfolioReviewData, PortfolioReviewRequest,
 } from "../types/api";
 
 type Market  = "domestic" | "overseas";
@@ -11,6 +12,9 @@ type EtfMarket = "kr" | "kr_overseas" | "us";
 
 const get = <T>(url: string, params?: Record<string, unknown>) =>
   axiosInstance.get<T>(url, params ? { params } : undefined).then((r) => r.data);
+
+const post = <T>(url: string, data: unknown) =>
+  axiosInstance.post<T>(url, data).then((r) => r.data);
 
 // ── Query Keys ──────────────────────────────────────────────────────────────
 export const Q = {
@@ -77,4 +81,6 @@ export const fetchers = {
       period,
       ...(startDate ? { start_date: startDate } : {}),
     }),
+  portfolioReview: (payload: PortfolioReviewRequest) =>
+    post<PortfolioReviewData>("/portfolio/review", payload),
 };
