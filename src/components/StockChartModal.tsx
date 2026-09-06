@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { createChart, LineSeries } from "lightweight-charts";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import axiosInstance from "../lib/axiosInstance";
+import parseError from "../lib/parseError";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import Spin from "./ui/Spin";
 import { ClockFaceIcon, CurrencyDollarIcon } from "./ui/Icons";
@@ -56,6 +57,7 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf, 
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(false);
   const [aiText, setAiText]     = useState("");
+  const [aiError, setAiError]   = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiOpen, setAiOpen]     = useState(false);
 
@@ -141,12 +143,15 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf, 
     if (aiText) { setAiOpen((v) => !v); return; }
     setAiOpen(true);
     setAiLoading(true);
+    setAiError("");
     axiosInstance
       .get<{ analysis: string }>("/ai-stock-analysis", {
         params: { ticker: stock.ticker, market: stock.market, name: stock.name },
       })
       .then((res) => setAiText(res.data.analysis ?? ""))
-      .catch(() => setAiText("분석 정보를 불러올 수 없습니다."))
+      // 실패 사유는 aiText에 넣지 않는다 — 넣으면 위쪽 캐시 분기에 걸려 재시도가 막힌다.
+      // 요청 한도(429)처럼 잠시 뒤 풀리는 오류는 다시 눌러볼 수 있어야 한다.
+      .catch((err) => setAiError(parseError(err)))
       .finally(() => setAiLoading(false));
   }, [aiText, stock]);
 
@@ -276,6 +281,8 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf, 
                   <div className="h-2.5 bg-gray-700/60 rounded-full animate-pulse w-5/6" />
                   <div className="h-2.5 bg-gray-700/60 rounded-full animate-pulse w-4/6" />
                 </div>
+              ) : aiError ? (
+                <p className="text-xs text-amber-300/90 leading-relaxed whitespace-pre-wrap" role="alert">{aiError}</p>
               ) : (
                 <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{aiText}</p>
               )}

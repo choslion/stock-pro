@@ -18,7 +18,9 @@ axiosInstance.interceptors.response.use(
       const statusMessages: Record<number, string> = {
         400: "잘못된 요청입니다.",
         404: "요청한 리소스를 찾을 수 없습니다.",
+        429: "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
         500: "서버 에러입니다.",
+        503: "외부 데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
       };
       message = (status !== undefined ? statusMessages[status] : undefined)
         ?? "알 수 없는 오류가 발생했습니다.";
