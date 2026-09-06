@@ -160,23 +160,39 @@ export default function AIChatSection() {
         signal:  ctrl.signal,
       });
 
+      // 오류 응답은 SSE가 아니라 JSON이라 아래 파싱 루프가 아무것도 건지지 못한다.
+      // 여기서 걸러내지 않으면 요청 한도(429) 안내가 빈 말풍선으로 보인다.
+      if (!res.ok) {
+        const detail = await res.json().then(
+          (body) => (body as { detail?: string }).detail,
+          () => undefined,
+        );
+        bufferRef.current = detail ?? "답변을 가져오지 못했습니다. 잠시 후 다시 시도해주세요.";
+        return;
+      }
+
       if (!res.body) throw new Error("no body");
 
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
+      let carry = "";   // 청크 경계에서 잘린 마지막 줄
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const lines = decoder.decode(value).split("\n");
+        // stream: true — 한글은 3바이트라 청크 경계에 걸리면 글자가 깨진다.
+        carry += decoder.decode(value, { stream: true });
+        const lines = carry.split("\n");
+        carry = lines.pop() ?? "";   // 마지막 줄은 아직 안 끝났을 수 있으니 다음 청크로 넘긴다
+
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const data = line.slice(6).trim();
-          if (data === "[DONE]") break;
+          if (data === "[DONE]") continue;
           try {
             bufferRef.current += (JSON.parse(data) as { text: string }).text;
-          } catch { /* partial chunk */ }
+          } catch { /* 형식이 깨진 줄은 건너뛴다 */ }
         }
       }
     } catch (e) {
