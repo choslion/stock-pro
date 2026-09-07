@@ -1847,7 +1847,7 @@ Rules:
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=300,
-            temperature=0.2,
+            extra_body={"temperature": 0.2},  # anthropic 1.x에서 temperature 인자 제거됨
             messages=[{"role": "user", "content": prompt}],
         )
         text = _clean_ai_text(message.content[0].text)
@@ -2014,7 +2014,7 @@ def _generate_briefing() -> dict:
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=768,
-            temperature=0.2,
+            extra_body={"temperature": 0.2},  # anthropic 1.x에서 temperature 인자 제거됨
             messages=[{"role": "user", "content": prompt}],
         )
         raw = message.content[0].text.strip()
@@ -2221,7 +2221,7 @@ def post_portfolio_review(req: PortfolioReviewRequest, request: Request):
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=512,
-            temperature=0.2,
+            extra_body={"temperature": 0.2},  # anthropic 1.x에서 temperature 인자 제거됨
             messages=[{"role": "user", "content": prompt}],
         )
         raw = message.content[0].text.strip()
