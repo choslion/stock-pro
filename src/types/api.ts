@@ -116,13 +116,24 @@ export interface InvestorTrendStock {
   name:        string;
   price:       number;
   change_rate: number;
-  marcap?:     number;
-  amount?:     number;
+  net_amount:  number;
+}
+
+export interface InvestorRankingGroup {
+  net_buy:  InvestorTrendStock[];
+  net_sell: InvestorTrendStock[];
 }
 
 export interface InvestorTrendsData {
-  marcap: InvestorTrendStock[];
-  hot:    InvestorTrendStock[];
+  market:     string;
+  as_of:      string;
+  source:     string;
+  fetched_at: string;
+  investors: {
+    foreign:     InvestorRankingGroup;
+    institution: InvestorRankingGroup;
+    individual:  InvestorRankingGroup;
+  };
 }
 
 // ── /stocks/ranking ───────────────────────────────────────────────────────────

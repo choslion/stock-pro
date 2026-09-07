@@ -86,7 +86,12 @@ def _refresh_in_background(key: str, fetch_fn):
     threading.Thread(target=run, daemon=True).start()
 
 
-def _get_cached(key: str, fetch_fn):
+def _get_cached(
+    key: str,
+    fetch_fn,
+    ttl: int = _CACHE_TTL,
+    hard_ttl: int = _CACHE_HARD_TTL,
+):
     """캐시 히트/미스 관계없이 데이터가 처음 수집된 시각(fetched_at)을 함께 반환한다.
 
     stale-while-revalidate: TTL이 지나도 HARD_TTL 이내면 옛 데이터를 즉시 반환하고
@@ -94,10 +99,10 @@ def _get_cached(key: str, fetch_fn):
     """
     now = time.time()
     entry = _cache.get(key)
-    if entry and now - entry["ts"] < _CACHE_HARD_TTL:
+    if entry and now - entry["ts"] < hard_ttl:
         data = entry["data"]
         ts   = entry["ts"]
-        if now - ts >= _CACHE_TTL:
+        if now - ts >= ttl:
             _refresh_in_background(key, fetch_fn)
     else:
         data = fetch_fn()
@@ -667,45 +672,209 @@ def get_sectors(market: str = Query("KOSPI")):
 
 
 @app.get("/investor-trends")
-def get_investor_trends(market: str = Query("KOSPI")):
+def get_investor_trends(
+    market: str = Query("KOSPI"),
+    limit: int = Query(20, ge=1, le=50),
+):
+    market = market.upper()
+    if market not in {"KOSPI", "KOSDAQ", "ALL"}:
+        raise HTTPException(400, "market은 KOSPI, KOSDAQ, ALL만 허용됩니다.")
+
     def fetch():
-        df = _get_listing(market)
-        if df.empty:
-            raise HTTPException(503, "데이터를 가져올 수 없습니다.")
+        # 수급 데이터에는 현재가/등락률이 없으므로 기존 국내 시세와 티커로 결합한다.
+        quote_map = {}
 
-        df = df.copy()  # 컬럼을 제자리 수정하므로 공유 캐시 원본 보호
-        for col in ["ForeignRatio", "Amount"]:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        def normalize_ticker(value) -> str:
+            ticker = str(value).strip()
+            if ticker.endswith(".0"):
+                ticker = ticker[:-2]
+            return ticker.zfill(6)
 
-        def to_rows(sorted_df, extra_key=None, extra_col=None):
-            rows = []
-            for i, (_, row) in enumerate(sorted_df.head(20).iterrows(), 1):
-                item = {
-                    "rank": i,
-                    "ticker": str(row.get("Symbol", row.get("Code", ""))),
+        try:
+            listing = _get_listing(market)
+            for _, row in listing.iterrows():
+                ticker = normalize_ticker(row.get("Symbol", row.get("Code", "")))
+                quote_map[ticker] = {
                     "name": str(row.get("Name", "")),
                     "price": int(row["Close"]) if pd.notna(row.get("Close")) else 0,
                     "change_rate": round(float(row["ChgRatio"]), 2) if pd.notna(row.get("ChgRatio")) else 0.0,
                 }
-                if extra_key and extra_col and extra_col in row.index:
-                    item[extra_key] = round(float(row[extra_col]), 2)
-                rows.append(item)
-            return rows
+        except Exception:
+            # 시세 결합 실패가 수급 순위 전체 실패로 이어지지 않게 한다.
+            quote_map = {}
 
-        result = {
-            "marcap": to_rows(
-                df.sort_values("Marcap", ascending=False) if "Marcap" in df.columns else df,
-                "marcap", "Marcap"
-            ),
-            "hot": to_rows(
-                df.sort_values("Amount", ascending=False) if "Amount" in df.columns else df,
-                "amount", "Amount"
-            ),
+        def make_row(rank, ticker, name, net_amount):
+            ticker = normalize_ticker(ticker)
+            quote = quote_map.get(ticker, {})
+            return {
+                "rank": rank,
+                "ticker": ticker,
+                "name": name or quote.get("name", ticker),
+                "price": quote.get("price", 0),
+                "change_rate": quote.get("change_rate", 0.0),
+                "net_amount": int(net_amount),
+            }
+
+        def to_rankings(df):
+            normalized = df.copy()
+            amount_col = "순매수거래대금"
+            if amount_col not in normalized.columns:
+                raise HTTPException(503, "투자자 수급 응답 형식이 변경되었습니다.")
+            normalized[amount_col] = pd.to_numeric(normalized[amount_col], errors="coerce").fillna(0)
+
+            def rows_for(sorted_df):
+                rows = []
+                for rank, (index, row) in enumerate(sorted_df.head(limit).iterrows(), 1):
+                    ticker = row.get("티커", index)
+                    rows.append(make_row(rank, ticker, str(row.get("종목명", "")), row[amount_col]))
+                return rows
+
+            net_buy = normalized[normalized[amount_col] > 0].sort_values(amount_col, ascending=False)
+            net_sell = normalized[normalized[amount_col] < 0].sort_values(amount_col, ascending=True)
+            return {
+                "net_buy": rows_for(net_buy),
+                "net_sell": rows_for(net_sell),
+            }
+
+        # KRX 계정이 설정된 환경에서는 원본 KRX 조회를 우선 사용한다.
+        has_krx_credentials = bool(os.environ.get("KRX_ID") and os.environ.get("KRX_PW"))
+        if _HAS_PYKRX and has_krx_credentials:
+            rank_fetcher = getattr(_krx, "get_market_net_purchases_of_equities", None)
+            if not callable(rank_fetcher):
+                rank_fetcher = getattr(_krx, "get_market_net_purchases_of_equities_by_ticker", None)
+
+            if callable(rank_fetcher):
+                now_kst = datetime.now(_timezone(timedelta(hours=9)))
+                first_day = now_kst.date() if now_kst.hour >= 18 else now_kst.date() - timedelta(days=1)
+                investor_labels = {
+                    "foreign": "외국인",
+                    "institution": "기관합계",
+                    "individual": "개인",
+                }
+                for days_back in range(10):
+                    candidate = first_day - timedelta(days=days_back)
+                    if candidate.weekday() >= 5:
+                        continue
+                    date_str = candidate.strftime("%Y%m%d")
+                    try:
+                        frames = {
+                            key: rank_fetcher(date_str, date_str, market, label)
+                            for key, label in investor_labels.items()
+                        }
+                        if all(df is not None and not df.empty for df in frames.values()):
+                            return {
+                                "market": market,
+                                "as_of": candidate.isoformat(),
+                                "source": "KRX",
+                                "investors": {key: to_rankings(df) for key, df in frames.items()},
+                            }
+                    except Exception:
+                        continue
+
+        # KRX 로그인 정보가 없거나 조회가 실패하면 공개된 Npay 증권 순위표를 사용한다.
+        import re as _re
+        import requests as _req
+        from bs4 import BeautifulSoup as _BS
+
+        if market == "ALL":
+            raise HTTPException(400, "투자자 동향의 ALL 시장 조회는 지원하지 않습니다.")
+
+        market_code = "01" if market == "KOSPI" else "02"
+        investor_codes = {
+            "foreign": "9000",
+            "institution": "1000",
+            "individual": "8000",
         }
-        return result
 
-    return _get_cached(f"investor_trends_{market}", fetch)
+        def fetch_naver_side(investor_key: str, side: str):
+            response = _req.get(
+                "https://finance.naver.com/sise/sise_deal_rank_iframe.naver",
+                params={
+                    "investor_gubun": investor_codes[investor_key],
+                    "sosok": market_code,
+                    "type": "buy" if side == "net_buy" else "sell",
+                },
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=15,
+            )
+            response.raise_for_status()
+            soup = _BS(response.content, "html.parser", from_encoding="euc-kr")
+            tables = soup.select("table.type_1")
+            if not tables:
+                raise ValueError("투자자 순위 표를 찾을 수 없습니다.")
+
+            date_matches = _re.findall(r"\b(\d{2})\.(\d{2})\.(\d{2})\b", soup.get_text(" ", strip=True))
+            if not date_matches:
+                raise ValueError("투자자 순위 기준일을 찾을 수 없습니다.")
+            year, month, day = date_matches[-1]
+            as_of = f"20{year}-{month}-{day}"
+
+            items = []
+            for tr in tables[-1].select("tr"):
+                link = tr.select_one('a[href*="code="]')
+                cells = [cell.get_text(" ", strip=True) for cell in tr.select("th, td")]
+                if link is None or len(cells) < 3:
+                    continue
+                # 2025년 이후 ETF 단축코드에는 영문자가 포함될 수 있다(예: 0193T0).
+                ticker_match = _re.search(r"code=([0-9A-Z]{6})", link.get("href", ""), _re.IGNORECASE)
+                if ticker_match is None:
+                    continue
+                try:
+                    amount_million = int(cells[2].replace(",", "").replace("+", ""))
+                except ValueError:
+                    continue
+                signed_amount = abs(amount_million) * 1_000_000
+                if side == "net_sell":
+                    signed_amount *= -1
+                items.append(
+                    make_row(
+                        len(items) + 1,
+                        ticker_match.group(1),
+                        link.get_text(" ", strip=True),
+                        signed_amount,
+                    )
+                )
+                if len(items) >= limit:
+                    break
+
+            if not items:
+                raise ValueError("투자자 순위 데이터가 비어 있습니다.")
+            return investor_key, side, as_of, items
+
+        jobs = [
+            (investor_key, side)
+            for investor_key in investor_codes
+            for side in ("net_buy", "net_sell")
+        ]
+        rankings = {
+            investor_key: {"net_buy": [], "net_sell": []}
+            for investor_key in investor_codes
+        }
+        as_of_dates = []
+        try:
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                futures = [executor.submit(fetch_naver_side, *job) for job in jobs]
+                for future in as_completed(futures):
+                    investor_key, side, as_of, items = future.result()
+                    rankings[investor_key][side] = items
+                    as_of_dates.append(as_of)
+        except Exception:
+            raise HTTPException(503, "최근 투자자 수급 데이터를 가져올 수 없습니다.")
+
+        return {
+            "market": market,
+            "as_of": max(as_of_dates),
+            "source": "Npay 증권",
+            "investors": rankings,
+        }
+
+    # 분 단위로 변하지 않는 KRX 집계값이므로 호출을 줄이고 장애 시 stale 데이터를 유지한다.
+    return _get_cached(
+        f"investor_trends_{market}_{limit}",
+        fetch,
+        ttl=5 * 60,
+        hard_ttl=6 * 60 * 60,
+    )
 
 
 # ── 해외 주식 ──────────────────────────────────────────────────────

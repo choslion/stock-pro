@@ -31,7 +31,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: "ranking",     label: "실시간 차트",  title: "실시간 차트",  subtitle: "거래대금·거래량·등락 기준 순위", icon: ChartBarIcon       },
-  { id: "investor",    label: "투자자 동향",  title: "투자자 동향",  subtitle: "기관·외국인·개인 매매 추이",    icon: ActivityIcon       },
+  { id: "investor",    label: "투자자 동향",  title: "투자자 동향",  subtitle: "외국인·기관·개인 순매수·순매도 1~20위", icon: ActivityIcon       },
   { id: "etf",         label: "ETF",          title: "ETF",          subtitle: "국내외 주요 ETF",              icon: GridIcon           },
   { id: "commodities", label: "원자재",       title: "원자재",       subtitle: "실시간 주요 상품 가격",         icon: TrendingUpIcon     },
   { id: "forex",       label: "환율",         title: "환율",         subtitle: "주요 통화 환율",               icon: CurrencyDollarIcon },
