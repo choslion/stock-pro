@@ -1852,6 +1852,8 @@ Rules:
         )
         text = _clean_ai_text(message.content[0].text)
     except Exception:
+        import traceback
+        traceback.print_exc()   # 사용자에겐 안내 문구만, 원인은 로그에
         raise HTTPException(503, "AI 분석을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.")
 
     result = {"analysis": text}
@@ -2019,6 +2021,8 @@ def _generate_briefing() -> dict:
         )
         raw = message.content[0].text.strip()
     except Exception:
+        import traceback
+        traceback.print_exc()   # 사용자에겐 안내 문구만, 원인은 로그에
         raise HTTPException(503, "AI 브리핑을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.")
 
     DISCLAIMER = "※ AI가 시장 데이터를 분석하여 자동 생성된 브리핑입니다."
@@ -2233,6 +2237,8 @@ def post_portfolio_review(req: PortfolioReviewRequest, request: Request):
         if not summary or not best or not mistake:
             raise ValueError("AI 복기 응답 형식 오류")
     except Exception:
+        import traceback
+        traceback.print_exc()   # 사용자에겐 안내 문구만, 원인은 로그에
         raise HTTPException(503, "AI 복기를 일시적으로 만들 수 없습니다. 잠시 후 다시 시도해주세요.")
 
     return {
