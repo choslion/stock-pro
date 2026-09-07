@@ -147,13 +147,12 @@ export default function PaperPortfolio({ onOpenSearch }: PaperPortfolioProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-xs font-semibold text-blue-400">PAPER PORTFOLIO</p>
-          <h1 className="mt-1 text-xl font-bold text-white">모의투자</h1>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-white">모의투자</h1>
           <p className="mt-1 text-xs text-gray-500">가상 자금으로 사고팔며 수익률을 확인해보세요.</p>
         </div>
-        <button onClick={onOpenSearch} className="flex h-9 items-center gap-1.5 rounded-xl bg-blue-500 px-3 text-xs font-semibold text-white hover:bg-blue-400">
+        <button onClick={onOpenSearch} className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-blue-500 px-3 text-xs font-semibold text-white hover:bg-blue-400">
           <MagnifyingGlassIcon className="h-3.5 w-3.5" />
           종목 찾기
         </button>
@@ -195,17 +194,18 @@ export default function PaperPortfolio({ onOpenSearch }: PaperPortfolioProps) {
         ) : (
           <div className="divide-y divide-gray-700/50">
             {summary.holdings.map((holding) => (
-              <div key={`${holding.market}:${holding.ticker}`} className="flex w-full items-center gap-3 py-3">
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${holding.market === "KR" ? "bg-blue-900/60 text-blue-300" : "bg-yellow-900/60 text-yellow-300"}`}>{holding.market}</span>
+              <div key={`${holding.market}:${holding.ticker}`} className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 py-3">
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${holding.market === "KR" ? "bg-blue-900/60 text-blue-300" : "bg-yellow-900/60 text-yellow-300"}`}>{holding.market}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{holding.name}</p>
-                  <p className="mt-0.5 text-[11px] text-gray-500">평균 {formatKrwCompact(holding.averagePriceKrw)} · {formatQty(holding.quantity)}주</p>
+                  <p className="mt-0.5 truncate text-[11px] text-gray-500">평균 {formatKrwCompact(holding.averagePriceKrw)} · {formatQty(holding.quantity)}주</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold text-gray-200 tabular-nums">{formatKrwCompact(holding.currentValue)}</p>
                   <p className="text-xs"><Rate value={holding.returnRate} /></p>
                 </div>
-                <div className="flex shrink-0 gap-1">
+                {/* 420px 미만에서는 버튼이 눌리는 대신 아랫줄로 내려간다 */}
+                <div className="flex w-full shrink-0 justify-end gap-1 min-[420px]:w-auto">
                   <button onClick={() => openTrade(holding, "buy")} className="rounded-lg border border-red-500/25 px-2 py-1.5 text-[11px] font-semibold text-red-300 hover:bg-red-500/10">매수</button>
                   <button onClick={() => openTrade(holding, "sell")} className="rounded-lg border border-blue-500/25 px-2 py-1.5 text-[11px] font-semibold text-blue-300 hover:bg-blue-500/10">매도</button>
                 </div>
