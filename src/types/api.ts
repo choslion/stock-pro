@@ -42,6 +42,8 @@ export interface MarketEventsData {
   source:       string;
   source_url:   string;
   fetched_at:   string;
+  /** KIND 조회 자체가 실패하면 false. 이때 아래 목록은 "없음"이 아니라 "모름"이다. */
+  available:    boolean;
   active_events: MarketEvent[];
   today_events:  MarketEvent[];
 }

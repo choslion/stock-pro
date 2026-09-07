@@ -586,6 +586,12 @@ def _fetch_krx_market_events(now: datetime | None = None) -> dict:
         "Accept-Language": "ko-KR,ko;q=0.9",
     }
 
+    base = {
+        "as_of": date_text,
+        "source": "KRX KIND",
+        "source_url": _KRX_MARKET_ACTION_PAGE,
+    }
+
     found = {}
     try:
         with httpx.Client(timeout=8, follow_redirects=True, headers=headers) as client:
@@ -595,17 +601,19 @@ def _fetch_krx_market_events(now: datetime | None = None) -> dict:
                 response.raise_for_status()
                 for event in _parse_krx_market_event_rows(response.content):
                     found[event["id"]] = event
-    except Exception as exc:
-        raise HTTPException(503, "KRX 시장조치 공지를 확인할 수 없습니다.") from exc
+    except Exception:
+        # 알림 배너는 부가 기능이라 조회에 실패해도 앱 전체를 실패로 만들지 않는다.
+        # 503을 내면 프런트가 폴링할 때마다 오류 토스트가 뜬다.
+        # 다만 "확인 못 함"과 "오늘 발동 없음"은 다르므로 available로 구분한다.
+        return {**base, "available": False, "active_events": [], "today_events": []}
 
     today_events = [
         _with_market_event_status(event, now)
         for event in sorted(found.values(), key=lambda item: item["occurred_at"], reverse=True)
     ]
     return {
-        "as_of": date_text,
-        "source": "KRX KIND",
-        "source_url": _KRX_MARKET_ACTION_PAGE,
+        **base,
+        "available": True,
         "active_events": [event for event in today_events if event["status"] != "ended"],
         "today_events": today_events,
     }
