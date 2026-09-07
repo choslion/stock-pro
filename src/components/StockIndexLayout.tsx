@@ -10,6 +10,7 @@ const HelpGuide       = lazy(() => import("./HelpGuide"));
 const AIChatSection   = lazy(() => import("./AIChatSection"));
 import SearchModal from "./SearchModal";
 import PaperTradeSheet from "./PaperTradeSheet";
+import MarketAlertBanner from "./MarketAlertBanner";
 import type { SearchResultItem } from "./SearchModal";
 import { ChartBarIcon, TrendingUpIcon, NewspaperIcon, CurrencyDollarIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
@@ -202,6 +203,7 @@ export default function StockIndexDashboard() {
       <AnimatePresence>
         {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       </AnimatePresence>
+      <MarketAlertBanner />
 
       {/* ════════ PC (lg+): 사이드바 레이아웃 ════════ */}
       <div className="hidden lg:flex min-h-screen">

@@ -3,7 +3,7 @@ import type {
   UsIndicesData, KospiData, VixData, FgiData, ScoreData, KrScoreData,
   Sp500Data, CommoditiesData, ForexData, SectorsData, UsSectorsData,
   InvestorTrendsData, DomesticRankingData, OverseasRankingData,
-  EtfData, WatchlistData, ThemeUsData, NewsData, ChartData,
+  EtfData, WatchlistData, ThemeUsData, NewsData, ChartData, MarketEventsData,
 } from "../types/api";
 
 type Market  = "domestic" | "overseas";
@@ -16,6 +16,7 @@ const get = <T>(url: string, params?: Record<string, unknown>) =>
 export const Q = {
   usIndices:      () => ["us-indices"]               as const,
   kospi:          () => ["kospi"]                    as const,
+  marketEvents:   () => ["market-events"]            as const,
   vix:            () => ["vix"]                      as const,
   fgi:            () => ["fgi"]                      as const,
   score:          () => ["score"]                    as const,
@@ -40,6 +41,7 @@ export const Q = {
 export const fetchers = {
   usIndices:      () => get<UsIndicesData>("/us-indices"),
   kospi:          () => get<KospiData>("/kospi"),
+  marketEvents:   () => get<MarketEventsData>("/market-events"),
   vix:            () => get<VixData>("/vix"),
   fgi:            () => get<FgiData>("/fgi"),
   score:          () => get<ScoreData>("/score"),

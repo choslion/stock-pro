@@ -452,6 +452,172 @@ def get_kospi():
     return _get_cached("kospi", fetch)
 
 
+_KRX_MARKET_ACTION_URL = "https://kind.krx.co.kr/disclosure/details.do"
+_KRX_MARKET_ACTION_PAGE = (
+    "https://kind.krx.co.kr/disclosure/detailsExt.do?method=searchDetailsMktactMainExt"
+)
+_KRX_EVENT_SEARCH_TERMS = ("CB발동", "Sidecar발동", "사이드카")
+_KST = _timezone(timedelta(hours=9))
+
+
+def _parse_krx_market_event_rows(content: bytes) -> list[dict]:
+    """KIND 상세검색 결과에서 시장 전체 안정장치 공지만 정규화한다."""
+    import re as _re
+    from bs4 import BeautifulSoup as _BS
+
+    soup = _BS(content, "html.parser", from_encoding="utf-8")
+    events = []
+    for row in soup.select("tbody tr"):
+        cells = row.find_all("td")
+        link = row.select_one("a[onclick*='openDisclsViewer']")
+        if len(cells) < 5 or link is None:
+            continue
+
+        title = link.get("title") or link.get_text(" ", strip=True)
+        compact_title = _re.sub(r"\s+", "", title).lower()
+        is_circuit_breaker = "매매거래일시중단" in compact_title and "cb발동" in compact_title
+        is_sidecar = "sidecar발동" in compact_title or "사이드카" in compact_title
+        if not (is_circuit_breaker or is_sidecar):
+            continue
+
+        market = "KOSDAQ" if title.startswith("코스닥시장") else "KOSPI"
+        occurred_text = cells[1].get_text(" ", strip=True)
+        try:
+            occurred = datetime.strptime(occurred_text, "%Y-%m-%d %H:%M").replace(tzinfo=_KST)
+        except ValueError:
+            continue
+
+        onclick = link.get("onclick", "")
+        receipt_match = _re.search(r"openDisclsViewer\('(\d+)'", onclick)
+        receipt_no = receipt_match.group(1) if receipt_match else f"{market}-{occurred_text}"
+
+        if is_circuit_breaker:
+            phase_match = _re.search(r"(\d)단계", compact_title)
+            phase = int(phase_match.group(1)) if phase_match else None
+            direction = None
+        else:
+            phase = None
+            direction = "buy" if "매수" in title else "sell" if "매도" in title else None
+
+        events.append({
+            "id": receipt_no,
+            "kind": "circuit_breaker" if is_circuit_breaker else "sidecar",
+            "market": market,
+            "direction": direction,
+            "phase": phase,
+            "title": title,
+            "occurred_at": occurred.isoformat(timespec="minutes"),
+        })
+    return events
+
+
+def _with_market_event_status(event: dict, now: datetime) -> dict:
+    occurred = datetime.fromisoformat(event["occurred_at"])
+    result = dict(event)
+
+    if now < occurred:
+        result.update({"status": "ended", "halt_ends_at": None, "ends_at": event["occurred_at"]})
+        return result
+
+    if event["kind"] == "sidecar":
+        ends_at = occurred + timedelta(minutes=5)
+        result.update({
+            "status": "active" if occurred <= now < ends_at else "ended",
+            "halt_ends_at": None,
+            "ends_at": ends_at.isoformat(timespec="minutes"),
+        })
+        return result
+
+    if event.get("phase") == 3:
+        closes_at = occurred.replace(hour=15, minute=30)
+        result.update({
+            "status": "active" if occurred <= now < closes_at else "ended",
+            "halt_ends_at": None,
+            "ends_at": closes_at.isoformat(timespec="minutes"),
+        })
+        return result
+
+    halt_ends_at = occurred + timedelta(minutes=20)
+    ends_at = halt_ends_at + timedelta(minutes=10)
+    status = "active" if occurred <= now < halt_ends_at else "recovery" if now < ends_at else "ended"
+    result.update({
+        "status": status,
+        "halt_ends_at": halt_ends_at.isoformat(timespec="minutes"),
+        "ends_at": ends_at.isoformat(timespec="minutes"),
+    })
+    return result
+
+
+def _fetch_krx_market_events(now: datetime | None = None) -> dict:
+    now = now or datetime.now(_KST)
+    date_text = now.strftime("%Y-%m-%d")
+    common_payload = {
+        "method": "searchDetailsSub",
+        "currentPageSize": "15",
+        "pageIndex": "1",
+        "orderMode": "",
+        "orderStat": "",
+        "forward": "details_sub",
+        "disclosureType02": "",
+        "pDisclosureType02": "",
+        "searchCodeType": "",
+        "repIsuSrtCd": "",
+        "allRepIsuSrtCd": "",
+        "oldSearchCorpName": "",
+        "disclosureType": "",
+        "disTypevalue": "",
+        "reportCd": "",
+        "searchCorpName": "",
+        "business": "",
+        "marketType": "",
+        "kosdaqSegment": "",
+        "settlementMonth": "",
+        "securities": "",
+        "submitOblgNm": "",
+        "enterprise": "",
+        "fromDate": date_text,
+        "toDate": date_text,
+        "reportNmPop": "",
+        "bfrDsclsType": "on",
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": _KRX_MARKET_ACTION_PAGE,
+        "Accept-Language": "ko-KR,ko;q=0.9",
+    }
+
+    found = {}
+    try:
+        with httpx.Client(timeout=8, follow_redirects=True, headers=headers) as client:
+            for term in _KRX_EVENT_SEARCH_TERMS:
+                payload = {**common_payload, "reportNm": term, "reportNmTemp": term}
+                response = client.post(_KRX_MARKET_ACTION_URL, data=payload)
+                response.raise_for_status()
+                for event in _parse_krx_market_event_rows(response.content):
+                    found[event["id"]] = event
+    except Exception as exc:
+        raise HTTPException(503, "KRX 시장조치 공지를 확인할 수 없습니다.") from exc
+
+    today_events = [
+        _with_market_event_status(event, now)
+        for event in sorted(found.values(), key=lambda item: item["occurred_at"], reverse=True)
+    ]
+    return {
+        "as_of": date_text,
+        "source": "KRX KIND",
+        "source_url": _KRX_MARKET_ACTION_PAGE,
+        "active_events": [event for event in today_events if event["status"] != "ended"],
+        "today_events": today_events,
+    }
+
+
+@app.get("/market-events")
+def get_market_events():
+    # KIND 메인 공시가 10초 주기로 갱신되므로 전용 짧은 TTL을 사용한다.
+    # 일반 지표처럼 SWR로 한 주기를 더 기다리지 않고 10초가 지나면 동기 확인한다.
+    return _get_cached("market_events", _fetch_krx_market_events, ttl=10, hard_ttl=10)
+
+
 @app.get("/vix")
 def get_vix():
     value, date = fetch_vix_latest()

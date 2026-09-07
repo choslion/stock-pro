@@ -20,6 +20,32 @@ export interface KospiData {
   kosdaq: IndexData;
 }
 
+// ── /market-events ───────────────────────────────────────────────────────────
+export type MarketEventKind = "circuit_breaker" | "sidecar";
+export type MarketEventStatus = "active" | "recovery" | "ended";
+
+export interface MarketEvent {
+  id:           string;
+  kind:         MarketEventKind;
+  market:       "KOSPI" | "KOSDAQ";
+  direction:    "buy" | "sell" | null;
+  phase:        number | null;
+  title:        string;
+  occurred_at:  string;
+  status:       MarketEventStatus;
+  halt_ends_at: string | null;
+  ends_at:      string;
+}
+
+export interface MarketEventsData {
+  as_of:        string;
+  source:       string;
+  source_url:   string;
+  fetched_at:   string;
+  active_events: MarketEvent[];
+  today_events:  MarketEvent[];
+}
+
 // ── /vix ─────────────────────────────────────────────────────────────────────
 export interface VixData {
   value: string;
