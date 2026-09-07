@@ -3,37 +3,19 @@ import type { ChartPoint } from "../types/api";
 export const INITIAL_PAPER_CASH = 10_000_000;
 
 export type StockMarket = "KR" | "US";
-export type TradeReason = "earnings" | "news" | "theme" | "technical" | "impulse";
-export type InvestmentHorizon = "1m" | "3m" | "6m" | "1y";
-
-export const TRADE_REASON_LABELS: Record<TradeReason, string> = {
-  earnings: "실적",
-  news: "뉴스",
-  theme: "테마",
-  technical: "기술적 흐름",
-  impulse: "충동",
-};
-
-export const HORIZON_LABELS: Record<InvestmentHorizon, string> = {
-  "1m": "1개월",
-  "3m": "3개월",
-  "6m": "6개월",
-  "1y": "1년 이상",
-};
+export type TradeSide = "buy" | "sell";
 
 export interface PaperTrade {
   id: string;
   ticker: string;
   name: string;
   market: StockMarket;
+  side: TradeSide;
   quantity: number;
   unitPriceKrw: number;
   unitPriceOriginal: number;
   exchangeRate: number;
   totalKrw: number;
-  reason: TradeReason;
-  horizon: InvestmentHorizon;
-  thesis: string;
   createdAt: string;
 }
 
@@ -42,14 +24,13 @@ export interface HoldingSummary {
   name: string;
   market: StockMarket;
   quantity: number;
-  invested: number;
+  invested: number;          // 남은 수량의 취득원가 (이동평균)
   averagePriceKrw: number;
   currentPriceKrw: number | null;
   currentValue: number;
-  profit: number;
+  profit: number;            // 평가손익 (미실현)
   returnRate: number;
-  latestReason: TradeReason;
-  latestHorizon: InvestmentHorizon;
+  realized: number;          // 이 종목에서 확정된 손익
 }
 
 export interface PortfolioSummary {
@@ -60,7 +41,55 @@ export interface PortfolioSummary {
   totalAssets: number;
   profit: number;
   returnRate: number;
+  realizedProfit: number;
   holdings: HoldingSummary[];
+}
+
+function isUsableTrade(trade: PaperTrade): boolean {
+  return (
+    Number.isFinite(trade.totalKrw) && trade.totalKrw > 0
+    && Number.isFinite(trade.quantity) && trade.quantity > 0
+  );
+}
+
+function byCreatedAt(a: PaperTrade, b: PaperTrade): number {
+  return a.createdAt.localeCompare(b.createdAt);
+}
+
+/**
+ * 이동평균법으로 보유 수량·취득원가·실현손익을 계산한다.
+ * 매도는 보유 수량을 넘지 못하도록 잘라내고, 잘린 만큼 매도 금액도 비례 축소한다.
+ */
+function accumulate(items: PaperTrade[]) {
+  let quantity = 0;
+  let cost = 0;
+  let realized = 0;
+  let buyCash = 0;
+  let sellCash = 0;
+
+  for (const trade of [...items].sort(byCreatedAt)) {
+    if (trade.side === "sell") {
+      const sellQty = Math.min(trade.quantity, quantity);
+      if (sellQty <= 0) continue;
+      const proceeds = trade.totalKrw * (sellQty / trade.quantity);
+      const costOfSold = quantity > 0 ? (cost / quantity) * sellQty : 0;
+      realized += proceeds - costOfSold;
+      quantity -= sellQty;
+      cost -= costOfSold;
+      sellCash += proceeds;
+    } else {
+      quantity += trade.quantity;
+      cost += trade.totalKrw;
+      buyCash += trade.totalKrw;
+    }
+  }
+
+  // 부동소수점 잔재 정리 — 전량 매도했는데 원가가 남아 있으면 안 된다.
+  if (quantity <= 1e-9) {
+    quantity = 0;
+    cost = 0;
+  }
+  return { quantity, cost, realized, buyCash, sellCash };
 }
 
 export function calculatePortfolio(
@@ -70,42 +99,45 @@ export function calculatePortfolio(
 ): PortfolioSummary {
   const grouped = new Map<string, PaperTrade[]>();
   for (const trade of trades) {
-    if (!Number.isFinite(trade.totalKrw) || trade.totalKrw <= 0) continue;
+    if (!isUsableTrade(trade)) continue;
     const key = `${trade.market}:${trade.ticker}`;
     grouped.set(key, [...(grouped.get(key) ?? []), trade]);
   }
 
-  const holdings = [...grouped.values()].map((items): HoldingSummary => {
-    const sorted = [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    const latest = sorted[sorted.length - 1];
-    const quantity = sorted.reduce((sum, item) => sum + item.quantity, 0);
-    const invested = sorted.reduce((sum, item) => sum + item.totalKrw, 0);
+  let cash = initialCash;
+  let realizedProfit = 0;
+  const holdings: HoldingSummary[] = [];
+
+  for (const items of grouped.values()) {
+    const latest = [...items].sort(byCreatedAt)[items.length - 1];
+    const { quantity, cost, realized, buyCash, sellCash } = accumulate(items);
+
+    cash += sellCash - buyCash;
+    realizedProfit += realized;
+    if (quantity <= 0) continue;   // 전량 매도한 종목은 보유 목록에서 빠진다
+
     const current = currentPrices[`${latest.market}:${latest.ticker}`];
     const currentPriceKrw = Number.isFinite(current) && current > 0 ? current : null;
-    const currentValue = currentPriceKrw === null ? invested : quantity * currentPriceKrw;
-    const profit = currentValue - invested;
+    const currentValue = currentPriceKrw === null ? cost : quantity * currentPriceKrw;
+    const profit = currentValue - cost;
 
-    return {
+    holdings.push({
       ticker: latest.ticker,
       name: latest.name,
       market: latest.market,
       quantity,
-      invested,
-      averagePriceKrw: quantity > 0 ? invested / quantity : 0,
+      invested: cost,
+      averagePriceKrw: quantity > 0 ? cost / quantity : 0,
       currentPriceKrw,
       currentValue,
       profit,
-      returnRate: invested > 0 ? (profit / invested) * 100 : 0,
-      latestReason: latest.reason,
-      latestHorizon: latest.horizon,
-    };
-  });
+      returnRate: cost > 0 ? (profit / cost) * 100 : 0,
+      realized,
+    });
+  }
 
-  const invested = trades.reduce(
-    (sum, trade) => sum + (Number.isFinite(trade.totalKrw) ? Math.max(0, trade.totalKrw) : 0),
-    0,
-  );
-  const cash = Math.max(0, initialCash - invested);
+  cash = Math.max(0, cash);
+  const invested = holdings.reduce((sum, holding) => sum + holding.invested, 0);
   const holdingsValue = holdings.reduce((sum, holding) => sum + holding.currentValue, 0);
   const totalAssets = cash + holdingsValue;
   const profit = totalAssets - initialCash;
@@ -118,8 +150,21 @@ export function calculatePortfolio(
     totalAssets,
     profit,
     returnRate: initialCash > 0 ? (profit / initialCash) * 100 : 0,
+    realizedProfit,
     holdings: holdings.sort((a, b) => b.currentValue - a.currentValue),
   };
+}
+
+/** 특정 종목에서 지금 팔 수 있는 수량. */
+export function getOwnedQuantity(
+  trades: PaperTrade[],
+  market: StockMarket,
+  ticker: string,
+): number {
+  const items = trades.filter(
+    (trade) => isUsableTrade(trade) && trade.market === market && trade.ticker === ticker,
+  );
+  return items.length ? accumulate(items).quantity : 0;
 }
 
 function normalizeChartPoints(items: ChartPoint[] | undefined): ChartPoint[] {
@@ -136,8 +181,9 @@ function valueAtDate(items: ChartPoint[], date: string): number {
 }
 
 /**
- * 실제 매수와 같은 날짜·금액만 지수에 투자하고 남은 금액은 현금으로 둔 벤치마크 수익률.
- * fxItems를 전달하면 지수와 환율을 곱해 원화 기준 성과를 계산한다.
+ * 같은 날 같은 금액을 지수에 넣고 뺐다면 어땠을지 계산한 벤치마크 수익률.
+ * 매수하면 그 금액만큼 지수를 사고, 매도하면 회수한 금액만큼 지수를 판다.
+ * fxItems를 전달하면 지수와 환율을 곱해 원화 기준으로 계산한다.
  */
 export function calculateMatchedBenchmarkReturn(
   trades: PaperTrade[],
@@ -147,48 +193,38 @@ export function calculateMatchedBenchmarkReturn(
 ): number | null {
   const indexPoints = normalizeChartPoints(indexItems);
   const fxPoints = fxItems ? normalizeChartPoints(fxItems) : [];
-  const validTrades = trades.filter((trade) => Number.isFinite(trade.totalKrw) && trade.totalKrw > 0);
+  const validTrades = trades.filter(isUsableTrade).sort(byCreatedAt);
   if (indexPoints.length < 2 || validTrades.length === 0 || (fxItems && fxPoints.length < 2)) return null;
 
-  const finalIndex = indexPoints[indexPoints.length - 1].value;
-  const finalFx = fxItems ? fxPoints[fxPoints.length - 1].value : 1;
-  const spent = validTrades.reduce((sum, trade) => sum + trade.totalKrw, 0);
-  const benchmarkHoldingsValue = validTrades.reduce((sum, trade) => {
-    const tradeDate = trade.createdAt.slice(0, 10);
-    const entryIndex = valueAtDate(indexPoints, tradeDate);
-    const entryFx = fxItems ? valueAtDate(fxPoints, tradeDate) : 1;
-    const growth = (finalIndex * finalFx) / (entryIndex * entryFx);
-    return sum + trade.totalKrw * growth;
-  }, 0);
-  const benchmarkAssets = Math.max(0, initialCash - spent) + benchmarkHoldingsValue;
-  return initialCash > 0 ? ((benchmarkAssets - initialCash) / initialCash) * 100 : null;
-}
+  const priceAt = (date: string) => {
+    const index = valueAtDate(indexPoints, date);
+    const fx = fxItems ? valueAtDate(fxPoints, date) : 1;
+    return index * fx;
+  };
 
-/** AI 복기에는 극단값을 놓치지 않도록 수익률 상·하위 종목을 절반씩 전달한다. */
-export function selectReviewHoldings(holdings: HoldingSummary[], limit = 30): HoldingSummary[] {
-  if (limit <= 0) return [];
-  if (holdings.length <= limit) return holdings;
-  const lowerCount = Math.floor(limit / 2);
-  const upperCount = limit - lowerCount;
-  const ascending = [...holdings].sort((a, b) => a.returnRate - b.returnRate);
-  const lower = ascending.slice(0, lowerCount);
-  const upper = ascending.slice(-upperCount).reverse();
-  return [...upper, ...lower];
-}
+  let cash = initialCash;
+  let units = 0;
 
-export function getTradeVersion(trades: PaperTrade[]): string {
-  if (!trades.length) return "0";
-  const latest = [...trades].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  return `${trades.length}:${latest.id}:${latest.createdAt}`;
-}
+  for (const trade of validTrades) {
+    const price = priceAt(trade.createdAt.slice(0, 10));
+    if (!(price > 0)) continue;
 
-export function getWeekKey(date = new Date()): string {
-  const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = utc.getUTCDay() || 7;
-  utc.setUTCDate(utc.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
-  const week = Math.ceil((((utc.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
-  return `${utc.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+    if (trade.side === "sell") {
+      // 회수한 금액만큼 지수를 판다 (보유분을 넘지 않도록)
+      const wanted = trade.totalKrw / price;
+      const soldUnits = Math.min(units, wanted);
+      units -= soldUnits;
+      cash += soldUnits * price;
+    } else {
+      units += trade.totalKrw / price;
+      cash -= trade.totalKrw;
+    }
+  }
+
+  const lastIndex = indexPoints[indexPoints.length - 1].value;
+  const lastFx = fxItems ? fxPoints[fxPoints.length - 1].value : 1;
+  const finalAssets = Math.max(0, cash) + units * lastIndex * lastFx;
+  return initialCash > 0 ? ((finalAssets - initialCash) / initialCash) * 100 : null;
 }
 
 export function formatKrwCompact(value: number): string {

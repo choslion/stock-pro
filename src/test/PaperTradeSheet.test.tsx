@@ -2,6 +2,8 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import axiosInstance from '../lib/axiosInstance'
 import PaperTradeSheet from '../components/PaperTradeSheet'
+import { usePortfolioStore } from '../store/usePortfolioStore'
+import type { PaperTrade } from '../lib/portfolio'
 import { renderWithQuery } from './helpers'
 
 vi.mock('../lib/axiosInstance', () => ({
@@ -12,16 +14,26 @@ const mockGet = vi.mocked(axiosInstance.get)
 
 const STOCK = { ticker: '005930', name: '삼성전자', market: 'KR' as const, price: 80000, change_rate: 1.5 }
 
+function heldTrade(overrides: Partial<PaperTrade> = {}): PaperTrade {
+  return {
+    id: 'held', ticker: '005930', name: '삼성전자', market: 'KR', side: 'buy',
+    quantity: 10, unitPriceKrw: 80_000, unitPriceOriginal: 80_000, exchangeRate: 1,
+    totalKrw: 800_000, createdAt: '2026-07-01T00:00:00.000Z', ...overrides,
+  }
+}
+
 beforeEach(() => {
+  usePortfolioStore.setState({ trades: [] })
   mockGet.mockReset()
   mockGet.mockResolvedValue({
     data: { items: [{ ticker: '005930', price: 80000, change_rate: 1.5 }], usd_krw: 1400 },
   })
 })
 
-async function renderSheet(onClose = vi.fn()) {
-  renderWithQuery(<PaperTradeSheet stock={STOCK} onClose={onClose} />)
-  await waitFor(() => expect(screen.getByLabelText('투자 금액')).toBeInTheDocument())
+async function renderSheet(props: Partial<React.ComponentProps<typeof PaperTradeSheet>> = {}) {
+  const onClose = props.onClose ?? vi.fn()
+  renderWithQuery(<PaperTradeSheet stock={STOCK} {...props} onClose={onClose} />)
+  await waitFor(() => expect(screen.getByRole('tab', { name: '매수' })).toBeInTheDocument())
   return onClose
 }
 
@@ -35,7 +47,7 @@ describe('PaperTradeSheet 접근성', () => {
 
   it('마지막 요소에서 Tab을 누르면 초점이 시트 안에서 순환한다', async () => {
     await renderSheet()
-    screen.getByLabelText('기대 시나리오').focus()
+    screen.getByRole('button', { name: '가상 매수하기' }).focus()
     await userEvent.tab()
     expect(screen.getByLabelText('닫기')).toHaveFocus()
   })
@@ -44,7 +56,7 @@ describe('PaperTradeSheet 접근성', () => {
     await renderSheet()
     screen.getByLabelText('닫기').focus()
     await userEvent.tab({ shift: true })
-    expect(screen.getByLabelText('기대 시나리오')).toHaveFocus()
+    expect(screen.getByRole('button', { name: '가상 매수하기' })).toHaveFocus()
   })
 
   it('ESC로 닫을 수 있다', async () => {
@@ -62,13 +74,65 @@ describe('PaperTradeSheet 접근성', () => {
     expect(input).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByText('사용 가능한 현금을 초과했습니다.')).toBeInTheDocument()
   })
+})
 
-  it('기대 시나리오가 5자 미만이면 오류가 textarea와 연결된다', async () => {
+describe('PaperTradeSheet 매수', () => {
+  it('금액만 넣으면 바로 매수할 수 있다', async () => {
     await renderSheet()
-    const textarea = screen.getByLabelText('기대 시나리오')
-    await userEvent.type(textarea, '메모')
-    expect(textarea).toHaveAttribute('aria-invalid', 'true')
-    expect(textarea).toHaveAttribute('aria-describedby', 'paper-thesis-error')
-    expect(screen.getByText('5자 이상 적어주세요.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '가상 매수하기' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: '가상 매수하기' }))
+    const trades = usePortfolioStore.getState().trades
+    expect(trades).toHaveLength(1)
+    expect(trades[0].side).toBe('buy')
+    expect(trades[0].quantity).toBe(12)      // 1,000,000 / 80,000 내림
+  })
+})
+
+describe('PaperTradeSheet 매도', () => {
+  it('보유 수량이 없으면 매도 탭을 누를 수 없다', async () => {
+    await renderSheet()
+    expect(screen.getByRole('tab', { name: '매도' })).toBeDisabled()
+  })
+
+  it('보유 중이면 매도 탭으로 전환되고 보유 수량이 보인다', async () => {
+    usePortfolioStore.setState({ trades: [heldTrade()] })
+    await renderSheet()
+    await userEvent.click(screen.getByRole('tab', { name: '매도' }))
+    expect(screen.getByLabelText('매도 수량')).toBeInTheDocument()
+    expect(screen.getByText('10주')).toBeInTheDocument()
+  })
+
+  it('initialSide로 매도 화면을 바로 열 수 있다', async () => {
+    usePortfolioStore.setState({ trades: [heldTrade()] })
+    await renderSheet({ initialSide: 'sell' })
+    expect(screen.getByLabelText('매도 수량')).toBeInTheDocument()
+  })
+
+  it('국내 주식은 50%를 눌러도 소수점 주가 나오지 않는다', async () => {
+    usePortfolioStore.setState({ trades: [heldTrade({ quantity: 3, totalKrw: 240_000 })] })
+    await renderSheet({ initialSide: 'sell' })
+    await userEvent.click(screen.getByRole('button', { name: '50%' }))
+    expect(screen.getByLabelText('매도 수량')).toHaveValue('1')   // 1.5가 아니라 1
+  })
+
+  it('전량 버튼을 누르면 보유 수량이 채워지고 매도가 기록된다', async () => {
+    usePortfolioStore.setState({ trades: [heldTrade()] })
+    await renderSheet({ initialSide: 'sell' })
+    await userEvent.click(screen.getByRole('button', { name: '전량' }))
+    expect(screen.getByLabelText('매도 수량')).toHaveValue('10')
+    await userEvent.click(screen.getByRole('button', { name: '가상 매도하기' }))
+    const trades = usePortfolioStore.getState().trades
+    expect(trades[0].side).toBe('sell')
+    expect(trades[0].quantity).toBe(10)
+    expect(trades[0].totalKrw).toBe(800_000)
+  })
+
+  it('보유 수량을 넘겨 입력하면 aria-invalid로 표시된다', async () => {
+    usePortfolioStore.setState({ trades: [heldTrade()] })
+    await renderSheet({ initialSide: 'sell' })
+    const input = screen.getByLabelText('매도 수량')
+    await userEvent.type(input, '50')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText('보유 수량을 초과했습니다.')).toBeInTheDocument()
   })
 })
