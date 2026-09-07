@@ -6,6 +6,7 @@ import {
   calculateMatchedBenchmarkReturn,
   calculatePortfolio,
   formatKrwCompact,
+  formatQuantity,
   type TradeSide,
 } from "../lib/portfolio";
 import { usePortfolioStore } from "../store/usePortfolioStore";
@@ -29,8 +30,6 @@ interface PaperPortfolioProps {
 
 type TradeTarget = { stock: SearchResultItem; side: TradeSide };
 
-const formatQty = (value: number) => value.toLocaleString("ko-KR", { maximumFractionDigits: 4 });
-
 function Rate({ value, suffix = "%" }: { value: number; suffix?: string }) {
   const color = value > 0 ? "text-red-400" : value < 0 ? "text-blue-400" : "text-gray-400";
   return <span className={`font-semibold tabular-nums ${color}`}>{value > 0 ? "+" : ""}{value.toFixed(2)}{suffix}</span>;
@@ -42,7 +41,7 @@ function Amount({ value }: { value: number }) {
 }
 
 function BenchmarkValue({ value }: { value: number | null }) {
-  return value === null ? <span className="text-gray-600">-</span> : <Rate value={value} />;
+  return value === null ? <span className="text-gray-500">-</span> : <Rate value={value} />;
 }
 
 export default function PaperPortfolio({ onOpenSearch }: PaperPortfolioProps) {
@@ -165,7 +164,7 @@ export default function PaperPortfolio({ onOpenSearch }: PaperPortfolioProps) {
             <p className="mt-1 text-2xl font-bold text-white tabular-nums">{formatKrwCompact(summary.totalAssets)}</p>
             <div className="mt-1 flex items-center gap-2 text-xs">
               <Rate value={summary.returnRate} />
-              <span className="text-gray-600">{summary.profit >= 0 ? "+" : ""}{formatKrwCompact(summary.profit)}</span>
+              <span className="text-gray-500">{summary.profit >= 0 ? "+" : ""}{formatKrwCompact(summary.profit)}</span>
             </div>
           </div>
           <div className="rounded-xl bg-black/20 p-2.5 text-blue-300">
@@ -182,7 +181,7 @@ export default function PaperPortfolio({ onOpenSearch }: PaperPortfolioProps) {
             <div><p className="text-[10px] text-gray-500">S&amp;P 500 대비</p><p className="mt-1 text-xs"><BenchmarkValue value={sp500Return === null ? null : summary.returnRate - sp500Return} /></p></div>
           </div>
         </div>
-        {trades.length > 0 && <p className="mt-3 text-center text-[10px] text-gray-600">같은 날 같은 금액을 지수에 넣고 뺐다면 어땠을지와 비교합니다.</p>}
+        {trades.length > 0 && <p className="mt-3 text-center text-[10px] text-gray-500">같은 날 같은 금액을 지수에 넣고 뺐다면 어땠을지와 비교합니다.</p>}
         {!trades.length && <p className="mt-4 rounded-xl bg-white/5 px-3 py-2.5 text-xs leading-relaxed text-gray-400">가상 자금 {formatKrwCompact(INITIAL_PAPER_CASH)}이 준비됐어요. 마음에 드는 종목을 사고팔아 보세요.</p>}
       </section>
 
@@ -198,7 +197,7 @@ export default function PaperPortfolio({ onOpenSearch }: PaperPortfolioProps) {
                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${holding.market === "KR" ? "bg-blue-900/60 text-blue-300" : "bg-yellow-900/60 text-yellow-300"}`}>{holding.market}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{holding.name}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-gray-500">평균 {formatKrwCompact(holding.averagePriceKrw)} · {formatQty(holding.quantity)}주</p>
+                  <p className="mt-0.5 truncate text-[11px] text-gray-500">평균 {formatKrwCompact(holding.averagePriceKrw)} · {formatQuantity(holding.quantity)}주</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold text-gray-200 tabular-nums">{formatKrwCompact(holding.currentValue)}</p>
@@ -257,11 +256,11 @@ export default function PaperPortfolio({ onOpenSearch }: PaperPortfolioProps) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{trade.name}</p>
-                  <p className="mt-0.5 text-[11px] text-gray-500 tabular-nums">{formatQty(trade.quantity)}주 · {formatKrwCompact(trade.unitPriceKrw)}</p>
+                  <p className="mt-0.5 text-[11px] text-gray-500 tabular-nums">{formatQuantity(trade.quantity)}주 · {formatKrwCompact(trade.unitPriceKrw)}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold text-gray-200 tabular-nums">{formatKrwCompact(trade.totalKrw)}</p>
-                  <time className="text-[10px] text-gray-600">{new Date(trade.createdAt).toLocaleDateString("ko-KR")}</time>
+                  <time className="text-[10px] text-gray-500">{new Date(trade.createdAt).toLocaleDateString("ko-KR")}</time>
                 </div>
               </div>
             ))}

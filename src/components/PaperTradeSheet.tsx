@@ -5,6 +5,7 @@ import { Q, fetchers } from "../lib/queries";
 import {
   INITIAL_PAPER_CASH,
   formatKrwCompact,
+  formatQuantity,
   getOwnedQuantity,
   type TradeSide,
 } from "../lib/portfolio";
@@ -17,11 +18,6 @@ import { CurrencyDollarIcon, XMarkIcon } from "./ui/Icons";
 
 const QUICK_AMOUNTS = [100_000, 500_000, 1_000_000] as const;
 const QUICK_RATIOS = [0.25, 0.5, 1] as const;
-
-/** 소수점 넷째 자리까지 — 미국 주식 소수점 매수를 허용하는 단위 */
-const QTY_STEP = 10_000;
-const floorQty = (value: number) => Math.floor(value * QTY_STEP) / QTY_STEP;
-const formatQty = (value: number) => value.toLocaleString("ko-KR", { maximumFractionDigits: 4 });
 
 interface PaperTradeSheetProps {
   stock: SearchResultItem;
@@ -94,25 +90,24 @@ export default function PaperTradeSheet({ stock, onClose, onCompleted, initialSi
     return Math.max(0, INITIAL_PAPER_CASH - spent);
   }, [trades]);
 
-  /* 국내 주식은 소수점 거래가 없어 정수로, 미국 주식만 소수점 단위를 허용한다. */
-  const roundQty = (value: number) => (stock.market === "KR" ? Math.floor(value) : floorQty(value));
-
-  /* ── 매수: 금액을 넣으면 수량이 나온다 ── */
+  /* ── 매수: 금액을 넣으면 수량이 나온다 (주 단위) ── */
   const requestedAmount = Number(amountText.replace(/,/g, ""));
   const buyQuantity = unitPriceKrw > 0 && requestedAmount > 0
-    ? roundQty(requestedAmount / unitPriceKrw)
+    ? Math.floor(requestedAmount / unitPriceKrw)
     : 0;
   const buyTotal = buyQuantity * unitPriceKrw;
 
-  /* ── 매도: 수량을 넣으면 회수 금액이 나온다 ── */
+  /* ── 매도: 수량을 넣으면 회수 금액이 나온다 ──
+     부분 매도는 주 단위로 내리지만, 보유분 전체를 팔 때는 소수점 기록(구버전)도
+     남김없이 털어낸다. 내리기만 하면 0.6932주 같은 잔량이 영영 안 팔린다. */
   const requestedQty = Number(sellQtyText.replace(/,/g, ""));
   const sellQuantity = Number.isFinite(requestedQty) && requestedQty > 0
-    ? Math.min(roundQty(requestedQty), ownedQuantity)
+    ? (requestedQty >= ownedQuantity ? ownedQuantity : Math.floor(requestedQty))
     : 0;
   const sellTotal = sellQuantity * unitPriceKrw;
 
   const overCash = side === "buy" && requestedAmount > availableCash;
-  const overOwned = side === "sell" && requestedQty > ownedQuantity + 1 / QTY_STEP;
+  const overOwned = side === "sell" && requestedQty > ownedQuantity + 1e-6;
 
   const isValid = unitPriceKrw > 0 && hasValidExchangeRate && (
     side === "buy"
@@ -122,7 +117,7 @@ export default function PaperTradeSheet({ stock, onClose, onCompleted, initialSi
 
   const setAmount = (value: number) => setAmountText(String(Math.min(value, availableCash)));
   const setRatio = (ratio: number) =>
-    setSellQtyText(String(ratio === 1 ? ownedQuantity : roundQty(ownedQuantity * ratio)));
+    setSellQtyText(String(ratio === 1 ? ownedQuantity : Math.floor(ownedQuantity * ratio)));
 
   const switchSide = (next: TradeSide) => {
     if (next === "sell" && !canSell) return;
@@ -224,7 +219,7 @@ export default function PaperTradeSheet({ stock, onClose, onCompleted, initialSi
                 ) : (
                   <>
                     <span>보유 수량</span>
-                    <span className="font-semibold text-blue-300 tabular-nums">{formatQty(ownedQuantity)}주</span>
+                    <span className="font-semibold text-blue-300 tabular-nums">{formatQuantity(ownedQuantity)}주</span>
                   </>
                 )}
               </div>
@@ -257,7 +252,7 @@ export default function PaperTradeSheet({ stock, onClose, onCompleted, initialSi
                   {overCash
                     ? "사용 가능한 현금을 초과했습니다."
                     : buyQuantity > 0
-                      ? `예상 ${formatQty(buyQuantity)}주 · ${formatKrwCompact(buyTotal)}`
+                      ? `예상 ${formatQuantity(buyQuantity)}주 · ${formatKrwCompact(buyTotal)}`
                       : "최소 1주를 살 수 있는 금액을 입력해주세요."}
                 </p>
               </section>
@@ -267,7 +262,7 @@ export default function PaperTradeSheet({ stock, onClose, onCompleted, initialSi
                 <div className="relative mt-2">
                   <input
                     id="paper-quantity"
-                    inputMode="decimal"
+                    inputMode="numeric"
                     value={sellQtyText}
                     placeholder="0"
                     onChange={(event) => setSellQtyText(event.target.value.replace(/[^0-9.]/g, ""))}
@@ -288,7 +283,7 @@ export default function PaperTradeSheet({ stock, onClose, onCompleted, initialSi
                   {overOwned
                     ? "보유 수량을 초과했습니다."
                     : sellQuantity > 0
-                      ? `예상 회수 ${formatKrwCompact(sellTotal)}`
+                      ? `${formatQuantity(sellQuantity)}주 · 예상 회수 ${formatKrwCompact(sellTotal)}`
                       : "팔 수량을 입력해주세요."}
                 </p>
               </section>
@@ -302,7 +297,7 @@ export default function PaperTradeSheet({ stock, onClose, onCompleted, initialSi
               <CurrencyDollarIcon className="h-4 w-4" />
               {side === "buy" ? "가상 매수하기" : "가상 매도하기"}
             </button>
-            <p className="text-center text-[11px] text-gray-600">실제 주문은 발생하지 않으며 이 브라우저에만 저장됩니다.</p>
+            <p className="text-center text-[11px] text-gray-500">실제 주문은 발생하지 않으며 이 브라우저에만 저장됩니다.</p>
           </div>
         )}
       </div>

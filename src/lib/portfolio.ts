@@ -227,6 +227,12 @@ export function calculateMatchedBenchmarkReturn(
   return initialCash > 0 ? ((finalAssets - initialCash) / initialCash) * 100 : null;
 }
 
+/** 수량 표기. 새 거래는 항상 정수지만, 소수점 매수를 허용하던 시절의
+ *  기록도 읽을 수 있어야 해서 둘째 자리까지는 남긴다. */
+export function formatQuantity(value: number): string {
+  return value.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+}
+
 export function formatKrwCompact(value: number): string {
   const rounded = Math.round(value);
   if (Math.abs(rounded) >= 100_000_000) {

@@ -88,6 +88,42 @@ describe('PaperTradeSheet 매수', () => {
   })
 })
 
+describe('PaperTradeSheet 주 단위 거래', () => {
+  const US_STOCK = { ticker: 'ZETA', name: 'Zeta Global Holdings Corp.', market: 'US' as const, price: 30, change_rate: 1 }
+
+  it('미국 주식도 소수점 없이 정수로만 매수된다', async () => {
+    mockGet.mockResolvedValue({
+      data: { items: [{ ticker: 'ZETA', price_krw: 42_229, price_usd: 30, change_rate: 1 }], usd_krw: 1_400 },
+    })
+    const onClose = vi.fn()
+    renderWithQuery(<PaperTradeSheet stock={US_STOCK} onClose={onClose} />)
+    await waitFor(() => expect(screen.getByLabelText('투자 금액')).toBeInTheDocument())
+    // 1,000,000 / 42,229 = 23.68... -> 23주
+    expect(screen.getByText('예상 23주 · 971,267원')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '가상 매수하기' }))
+    expect(usePortfolioStore.getState().trades[0].quantity).toBe(23)
+  })
+
+  it('구버전 소수점 보유분도 전량 매도로 남김없이 팔린다', async () => {
+    usePortfolioStore.setState({
+      trades: [heldTrade({ quantity: 25.6932, unitPriceKrw: 42_229, totalKrw: 1_084_863 })],
+    })
+    await renderSheet({ initialSide: 'sell' })
+    await userEvent.click(screen.getByRole('button', { name: '전량' }))
+    await userEvent.click(screen.getByRole('button', { name: '가상 매도하기' }))
+    const sold = usePortfolioStore.getState().trades[0]
+    expect(sold.side).toBe('sell')
+    expect(sold.quantity).toBe(25.6932)   // 25주로 잘려 0.6932주가 남으면 안 된다
+  })
+
+  it('소수점 보유분을 일부만 팔면 주 단위로 내린다', async () => {
+    usePortfolioStore.setState({ trades: [heldTrade({ quantity: 25.6932 })] })
+    await renderSheet({ initialSide: 'sell' })
+    await userEvent.type(screen.getByLabelText('매도 수량'), '10.9')
+    expect(screen.getByText(/^10주 · 예상 회수/)).toBeInTheDocument()
+  })
+})
+
 describe('PaperTradeSheet 매도', () => {
   it('보유 수량이 없으면 매도 탭을 누를 수 없다', async () => {
     await renderSheet()
