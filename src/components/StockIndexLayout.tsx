@@ -216,7 +216,7 @@ export default function StockIndexDashboard() {
               <ChartBarIcon className="w-4 h-4 text-blue-400" />
               <p className="text-sm font-bold tracking-tight text-white">stock-pro</p>
             </div>
-            <p className="text-[11px] text-gray-600 mt-0.5 pl-6">실시간 시장 데이터</p>
+            <p className="text-[11px] text-gray-500 mt-0.5 pl-6">실시간 시장 데이터</p>
             <button
               onClick={() => setShowSearch(true)}
               className="mt-3 w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg
@@ -265,7 +265,7 @@ export default function StockIndexDashboard() {
 
           {/* 하단 버전 */}
           <div className="px-4 py-3 border-t border-gray-800/60">
-            <span className="text-[11px] text-gray-700">v1.0</span>
+            <span className="text-[11px] text-gray-500">v1.0</span>
           </div>
         </aside>
 
@@ -332,13 +332,13 @@ export default function StockIndexDashboard() {
                 className={`relative flex-1 flex flex-col items-center pt-2 pb-4 gap-1
                             transition-all duration-200
                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400
-                            ${isActive ? "text-blue-400" : "text-gray-600 hover:text-gray-400"}`}
+                            ${isActive ? "text-blue-400" : "text-gray-500 hover:text-gray-300"}`}
               >
                 {isActive && (
                   <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-b-full bg-blue-400" />
                 )}
                 <Icon className="w-5 h-5" />
-                <span className={`text-[10px] font-medium ${isActive ? "text-blue-400" : "text-gray-600"}`}>
+                <span className={`text-[10px] font-medium ${isActive ? "text-blue-400" : "text-gray-500"}`}>
                   {tab.label}
                 </span>
               </button>

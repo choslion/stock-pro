@@ -12,7 +12,7 @@ interface IndexBlockProps { label: string; data?: IndexData; }
 function IndexBlock({ label, data }: IndexBlockProps) {
   if (!data) {
     return (
-      <div className="flex flex-col items-center justify-center py-6 text-gray-600 text-sm">
+      <div className="flex flex-col items-center justify-center py-6 text-gray-500 text-sm">
         {label} 데이터 없음
       </div>
     );
@@ -32,7 +32,7 @@ function IndexBlock({ label, data }: IndexBlockProps) {
           ({isPositive ? "+" : ""}{data.change_pct.toFixed(2)}%)
         </span>
       </p>
-      <p className="text-[11px] text-gray-600 mt-1">{data.date} 기준</p>
+      <p className="text-[11px] text-gray-500 mt-1">{data.date} 기준</p>
     </div>
   );
 }

@@ -23,7 +23,7 @@ function IndexRow({ label, data }: IndexRowProps) {
     <div className="flex items-center justify-between px-1 py-3">
       <div>
         <p className="text-xs font-semibold text-gray-400">{label}</p>
-        <p className="text-[11px] text-gray-600 mt-0.5">{data.date}</p>
+        <p className="text-[11px] text-gray-500 mt-0.5">{data.date}</p>
       </div>
       <div className="text-right">
         <p className="text-lg font-bold tabular-nums text-white">
@@ -42,7 +42,7 @@ function IndexRow({ label, data }: IndexRowProps) {
 function IndexBlock({ label, data, border }: IndexBlockProps) {
   if (!data) {
     return (
-      <div className="flex flex-col items-center justify-center py-6 text-gray-600 text-sm">
+      <div className="flex flex-col items-center justify-center py-6 text-gray-500 text-sm">
         {label} 데이터 없음
       </div>
     );
@@ -59,7 +59,7 @@ function IndexBlock({ label, data, border }: IndexBlockProps) {
         {sign}{data.change.toFixed(2)}
         <span className="text-xs ml-1 opacity-80">({sign}{data.change_pct.toFixed(2)}%)</span>
       </p>
-      <p className="text-[11px] text-gray-600 mt-1">{data.date}</p>
+      <p className="text-[11px] text-gray-500 mt-1">{data.date}</p>
     </div>
   );
 }

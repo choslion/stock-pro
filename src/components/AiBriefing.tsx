@@ -170,7 +170,7 @@ export default function AiBriefing() {
                   ))}
                 </ul>
               )}
-              <p className="mt-3 text-[11px] text-gray-600">{DISCLAIMER}</p>
+              <p className="mt-3 text-[11px] text-gray-500">{DISCLAIMER}</p>
             </motion.div>
           ) : (
             <motion.p

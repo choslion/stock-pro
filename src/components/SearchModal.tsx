@@ -177,7 +177,7 @@ export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }:
             <button
               onClick={onClose}
               aria-label="검색 닫기"
-              className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
             >
               ESC
             </button>
@@ -189,7 +189,7 @@ export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }:
           {loading && <div className="flex justify-center py-8"><Spin /></div>}
 
           {!loading && query.trim().length < 2 && (
-            <p className="text-center text-gray-600 text-xs py-8">
+            <p className="text-center text-gray-500 text-xs py-8">
               2글자 이상 입력하면 검색합니다
             </p>
           )}

@@ -125,21 +125,21 @@ export default function GetKrScore() {
             <p className="text-sm font-semibold text-orange-300 mt-0.5">
               {detail.realized_vol}%
             </p>
-            <p className="text-[10px] text-gray-600">낮을수록 안정</p>
+            <p className="text-[10px] text-gray-500">낮을수록 안정</p>
           </div>
           <div className="text-center border-x border-gray-700">
             <p className="text-[11px] text-gray-500">20일선 대비</p>
             <p className={`text-sm font-semibold mt-0.5 ${detail.momentum_pct >= 0 ? "text-red-400" : "text-blue-400"}`}>
               {detail.momentum_pct >= 0 ? "+" : ""}{detail.momentum_pct}%
             </p>
-            <p className="text-[10px] text-gray-600">추세 강도</p>
+            <p className="text-[10px] text-gray-500">추세 강도</p>
           </div>
           <div className="text-center">
             <p className="text-[11px] text-gray-500">업종 상승폭</p>
             <p className="text-sm font-semibold text-green-400 mt-0.5">
               {detail.breadth_pct}%
             </p>
-            <p className="text-[10px] text-gray-600">상승 종목 비율</p>
+            <p className="text-[10px] text-gray-500">상승 종목 비율</p>
           </div>
         </div>
       )}
@@ -162,7 +162,7 @@ export default function GetKrScore() {
       </div>
 
       {/* 투자 유의문구 */}
-      <p className="mt-4 text-[10px] text-gray-600 leading-relaxed border-t border-gray-800 pt-3">
+      <p className="mt-4 text-[10px] text-gray-500 leading-relaxed border-t border-gray-800 pt-3">
         ※ 본 점수는 시장 심리 참고용 지표이며, 투자 판단의 근거로 사용하지 마세요. 투자 손실에 대한 책임은 투자자 본인에게 있습니다.
       </p>
     </Card>

@@ -148,10 +148,10 @@ export default function GetVixFgiScore() {
               <p className="text-[11px] text-gray-500">공포탐욕지수</p>
               <p className={`text-sm font-semibold mt-0.5 ${fgiLabel.color}`}>
                 {fgi.value.toFixed(1)}
-                <span className="text-[10px] text-gray-600 ml-0.5">/ 100</span>
+                <span className="text-[10px] text-gray-500 ml-0.5">/ 100</span>
               </p>
               <p className={`text-[10px] mt-0.5 ${fgiLabel.color}`}>{fgiLabel.ko}</p>
-              <p className="text-[10px] text-gray-600">CNN FGI</p>
+              <p className="text-[10px] text-gray-500">CNN FGI</p>
             </div>
           )}
           <div className="text-center border-x border-gray-700">
@@ -162,7 +162,7 @@ export default function GetVixFgiScore() {
             <p className={`text-[10px] mt-0.5 ${rsiColor}`}>
               {detail.rsi < 30 ? "과매도" : detail.rsi > 70 ? "과매수" : "중립"}
             </p>
-            <p className="text-[10px] text-gray-600">14일 RSI</p>
+            <p className="text-[10px] text-gray-500">14일 RSI</p>
           </div>
           <div className="text-center">
             <p className="text-[11px] text-gray-500">MA200 대비</p>
@@ -172,7 +172,7 @@ export default function GetVixFgiScore() {
             <p className="text-[10px] mt-0.5 text-gray-500">
               {detail.ma200_pct >= 0 ? "추세 상방" : "추세 하방"}
             </p>
-            <p className="text-[10px] text-gray-600">S&amp;P500 200일선</p>
+            <p className="text-[10px] text-gray-500">S&amp;P500 200일선</p>
           </div>
         </div>
       )}
@@ -196,7 +196,7 @@ export default function GetVixFgiScore() {
       </div>
 
       {/* 투자 유의문구 */}
-      <p className="mt-4 text-[10px] text-gray-600 leading-relaxed border-t border-gray-800 pt-3">
+      <p className="mt-4 text-[10px] text-gray-500 leading-relaxed border-t border-gray-800 pt-3">
         ※ 본 점수는 시장 심리 참고용 지표이며, 투자 판단의 근거로 사용하지 마세요. 투자 손실에 대한 책임은 투자자 본인에게 있습니다.
       </p>
     </Card>

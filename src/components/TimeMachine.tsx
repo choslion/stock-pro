@@ -166,7 +166,7 @@ function StockSearch({ onSelect }: { onSelect: (s: StockPick) => void }) {
         <div className="absolute z-10 mt-1 w-full rounded-lg bg-gray-900 border border-gray-700/80 shadow-xl overflow-hidden">
           {loading && <div className="flex justify-center py-3"><Spin /></div>}
           {!loading && results.length === 0 && (
-            <p className="text-center text-gray-600 text-xs py-3">검색 결과가 없습니다</p>
+            <p className="text-center text-gray-500 text-xs py-3">검색 결과가 없습니다</p>
           )}
           {!loading && results.map((item) => (
             <button
@@ -434,7 +434,7 @@ export default function TimeMachine({ onBack, initialStock }: TimeMachineProps) 
               {josa(stock.name, "을", "를")} <span className="font-semibold text-gray-200">{formatKrw(amount)}</span>어치 샀다면
             </p>
             {result.buyDate !== startDate && (
-              <p className="mt-1 text-[11px] text-gray-600">선택한 날짜 이후 첫 거래일을 매수일로 계산했어요.</p>
+              <p className="mt-1 text-[11px] text-gray-500">선택한 날짜 이후 첫 거래일을 매수일로 계산했어요.</p>
             )}
             <div className="flex flex-wrap items-baseline gap-2 mt-1.5">
               <span className="text-3xl font-bold text-white tabular-nums">
@@ -445,7 +445,7 @@ export default function TimeMachine({ onBack, initialStock }: TimeMachineProps) 
                 {isProfit ? "+" : ""}{result.rate.toFixed(1)}%
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-gray-600 tabular-nums">
+            <p className="mt-1 text-[11px] text-gray-500 tabular-nums">
               정확히 {result.finalValue.toLocaleString("ko-KR")}원 · {result.lastDate} 기준
             </p>
             <p className={`text-sm font-medium mt-1.5 ${isProfit ? "text-red-400" : isLoss ? "text-blue-400" : "text-gray-400"}`}>
@@ -458,13 +458,13 @@ export default function TimeMachine({ onBack, initialStock }: TimeMachineProps) 
 
             <div className="grid grid-cols-2 gap-2 mt-4">
               <div className="rounded-lg bg-gray-900/50 px-3 py-2">
-                <p className="text-[10px] text-gray-600">매수가</p>
+                <p className="text-[10px] text-gray-500">매수가</p>
                 <p className="mt-0.5 text-xs font-medium text-gray-300 tabular-nums">
                   {stock.market === "KR" ? `${result.buyPrice.toLocaleString("ko-KR")}원` : `$${result.buyPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
                 </p>
               </div>
               <div className="rounded-lg bg-gray-900/50 px-3 py-2">
-                <p className="text-[10px] text-gray-600">최근 가격</p>
+                <p className="text-[10px] text-gray-500">최근 가격</p>
                 <p className="mt-0.5 text-xs font-medium text-gray-300 tabular-nums">
                   {stock.market === "KR" ? `${result.lastPrice.toLocaleString("ko-KR")}원` : `$${result.lastPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
                 </p>
@@ -496,7 +496,7 @@ export default function TimeMachine({ onBack, initialStock }: TimeMachineProps) 
             </div>
 
             <div className="flex items-center justify-between gap-3 mt-3">
-              <p className="text-[11px] text-gray-600 leading-relaxed">
+              <p className="text-[11px] text-gray-500 leading-relaxed">
                 투자금 전액 기준 · {stock.market === "US" && "과거·현재 환율 반영 · "}배당·세금·수수료 미반영
               </p>
               <button
