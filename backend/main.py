@@ -605,6 +605,8 @@ def _fetch_krx_market_events(now: datetime | None = None) -> dict:
         # 알림 배너는 부가 기능이라 조회에 실패해도 앱 전체를 실패로 만들지 않는다.
         # 503을 내면 프런트가 폴링할 때마다 오류 토스트가 뜬다.
         # 다만 "확인 못 함"과 "오늘 발동 없음"은 다르므로 available로 구분한다.
+        import traceback
+        traceback.print_exc()   # 배포 환경에서 왜 막히는지 로그로 남긴다
         return {**base, "available": False, "active_events": [], "today_events": []}
 
     today_events = [
