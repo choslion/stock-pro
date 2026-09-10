@@ -1779,9 +1779,12 @@ def search_stocks(q: str = Query(...)):
                 resp = client.get(yf_search_url, params=params,
                                   headers={"User-Agent": "Mozilla/5.0"})
                 resp.raise_for_status()
+            us_exchange_codes = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "PNK", "OQB", "OQX"}
             quotes = [
                 item for item in resp.json().get("quotes", [])
-                if item.get("quoteType") in ("EQUITY", "ETF") and "symbol" in item
+                if item.get("quoteType") in ("EQUITY", "ETF")
+                and item.get("exchange") in us_exchange_codes
+                and "symbol" in item
             ][:5]
             yf_tickers  = [item["symbol"] for item in quotes
                            if item["symbol"] not in kr_matched_tickers]
