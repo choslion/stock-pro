@@ -742,6 +742,37 @@ def get_score():
 
 # ── 국내 주식 신규 엔드포인트 ──────────────────────────────────────
 
+def _read_krx_listing(market: str) -> pd.DataFrame:
+    """당일 FinanceDataReader 캐시가 늦으면 최근 생성된 KRX 캐시로 폴백."""
+    try:
+        return fdr.StockListing(market)
+    except Exception as original_error:
+        market_ids = {
+            "KRX": "ALL", "KRX-MARCAP": "ALL", "KOSPI": "STK",
+            "KOSDAQ": "KSQ", "KONEX": "KNX",
+        }
+        market_id = market_ids.get(market)
+        if market_id is None:
+            raise
+
+        today = datetime.now(_timezone(timedelta(hours=9))).date()
+        base_url = "https://raw.githubusercontent.com/FinanceData/fdr_krx_data_cache/refs/heads/master/data/listing/krx"
+        for days_ago in range(14):
+            date_text = (today - timedelta(days=days_ago)).isoformat()
+            try:
+                df = pd.read_csv(
+                    f"{base_url}/{date_text}.csv",
+                    index_col=0,
+                    dtype={"Code": str, "Dept": str, "ChangeCode": str, "MarketId": str},
+                ).reset_index(drop=True)
+            except Exception:
+                continue
+            if market_id != "ALL":
+                df = df[df["MarketId"] == market_id].reset_index(drop=True)
+            return df
+        raise original_error
+
+
 def _get_listing(market: str) -> pd.DataFrame:
     """국내 주식 목록 — 필터/엔드포인트와 무관하게 시장별 1회만 수집 (공유 캐시)."""
     return _cached_raw(f"kr_listing_{market}", lambda: _fetch_listing(market))
@@ -749,7 +780,7 @@ def _get_listing(market: str) -> pd.DataFrame:
 
 def _fetch_listing(market: str) -> pd.DataFrame:
     mkt = {"ALL": "KRX", "KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ"}.get(market, "KRX")
-    df = fdr.StockListing(mkt)
+    df = _read_krx_listing(mkt)
 
     # 실제 컬럼명 ChagesRatio (오타)를 ChgRatio로 통일
     if "ChagesRatio" in df.columns:
@@ -1395,13 +1426,19 @@ def get_watchlist(kr: str = Query(""), us: str = Query(""), kr_names: str = Quer
                         d[col] = pd.to_numeric(d[col], errors="coerce")
                 return d
 
-            krx_df = _normalize_df(fdr.StockListing("KRX"))
+            try:
+                krx_df = _normalize_df(fdr.StockListing("KRX"))
+            except Exception:
+                # FinanceDataReader의 KRX 목록은 당일 GitHub 캐시가 아직 생성되지
+                # 않았으면 404를 낼 수 있다. 한 종목의 시세 조회까지 함께 실패시키지
+                # 말고 아래의 DataReader 일봉 폴백으로 넘긴다.
+                krx_df = pd.DataFrame()
             etf_df = None  # lazy-load only if needed
-            krx_code_col = "Code" if "Code" in krx_df.columns else "Symbol"
+            krx_code_col = next((c for c in ["Code", "Symbol"] if c in krx_df.columns), None)
 
             for i, ticker in enumerate(kr_tickers):
                 name_hint = kr_names_list[i] if i < len(kr_names_list) else None
-                row = krx_df[krx_df[krx_code_col] == ticker]
+                row = krx_df[krx_df[krx_code_col] == ticker] if krx_code_col else pd.DataFrame()
 
                 if row.empty:
                     # fallback 1: ETF/KR listing by code
@@ -1434,7 +1471,26 @@ def get_watchlist(kr: str = Query(""), us: str = Query(""), kr_names: str = Quer
                         "change_rate": round(float(r["ChgRatio"]), 2) if pd.notna(r.get("ChgRatio")) else 0.0,
                     })
                 else:
-                    items.append({"ticker": ticker, "market": "KR", "price": 0, "change_rate": 0.0})
+                    # 전체 KRX 목록 캐시는 장 마감 직후 늦게 생성될 수 있다.
+                    # 종목별 최근 일봉은 별도 공급 경로를 사용하므로 현재가를 복구할 수 있다.
+                    try:
+                        end = datetime.now().date()
+                        start = end - timedelta(days=10)
+                        history = fdr.DataReader(ticker, str(start), str(end))
+                        closes = pd.to_numeric(history.get("Close"), errors="coerce").dropna()
+                        if closes.empty:
+                            raise ValueError("no close data")
+                        price = float(closes.iloc[-1])
+                        previous = float(closes.iloc[-2]) if len(closes) >= 2 else price
+                        change_rate = round((price - previous) / previous * 100, 2) if previous else 0.0
+                        items.append({
+                            "ticker": ticker,
+                            "market": "KR",
+                            "price": int(round(price)),
+                            "change_rate": change_rate,
+                        })
+                    except Exception:
+                        items.append({"ticker": ticker, "market": "KR", "price": 0, "change_rate": 0.0})
 
         usd_krw = None
         if us_tickers:
@@ -1671,7 +1727,7 @@ def _cached_krx_listing() -> pd.DataFrame:
     entry = _cache.get("_krx_full")
     if entry and now - entry["ts"] < 3600:
         return entry["data"]
-    df = fdr.StockListing("KRX")
+    df = _read_krx_listing("KRX")
     if "ChagesRatio" in df.columns:
         df = df.rename(columns={"ChagesRatio": "ChgRatio"})
     for col in ["Close", "ChgRatio"]:

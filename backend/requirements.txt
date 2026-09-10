@@ -3,7 +3,7 @@ uvicorn[standard]==0.32.1
 yfinance>=0.2.54
 httpx==0.28.1
 beautifulsoup4>=4.12,<5
-finance-datareader>=0.9.93
+finance-datareader==0.9.202
 pandas==2.2.3
 anthropic>=1.4,<2
 python-dotenv>=1.0,<2
