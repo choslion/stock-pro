@@ -1739,6 +1739,7 @@ def _cached_krx_listing() -> pd.DataFrame:
 
 import unicodedata as _unicodedata
 import difflib as _difflib
+import re as _search_re
 
 def _normalize(text: str) -> str:
     """검색어 정규화: 소문자, 공백/기호 제거, 유니코드 NFC."""
@@ -1757,7 +1758,7 @@ def _search_kr_aliases(q_norm: str, limit: int = 5) -> list[tuple[str, str]]:
     fuzzy:  list[tuple[float, str, str]] = []
 
     for norm_alias, original, ticker in _KR_ALIAS_NORMALIZED:
-        if q_norm in norm_alias:
+        if q_norm == norm_alias or (len(q_norm) >= 2 and q_norm in norm_alias):
             exact.append((0.0, ticker, original))
         else:
             ratio = _difflib.SequenceMatcher(None, q_norm, norm_alias).ratio()
@@ -1777,6 +1778,80 @@ def _search_kr_aliases(q_norm: str, limit: int = 5) -> list[tuple[str, str]]:
     return result
 
 
+def _search_naver_us(q: str, limit: int = 8) -> list[tuple[str, str]]:
+    """네이버 증권 자동완성에서 미국 종목의 티커와 한국어 표시명을 찾는다."""
+    try:
+        with httpx.Client(timeout=5) as client:
+            response = client.get(
+                "https://m.stock.naver.com/front-api/search/autoComplete",
+                params={"query": q, "target": "stock"},
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Referer": "https://m.stock.naver.com/",
+                },
+            )
+            response.raise_for_status()
+        items = response.json().get("result", {}).get("items", [])
+        return [
+            (str(item["code"]).upper().replace(" ", "-"), str(item.get("name") or item["code"]))
+            for item in items
+            if item.get("nationCode") == "USA"
+            and item.get("category") == "stock"
+            and item.get("code")
+        ][:limit]
+    except Exception:
+        return []
+
+
+def _search_yahoo_us(q: str, limit: int = 5) -> list[tuple[str, str]]:
+    """네이버 검색 누락·장애 시 사용할 Yahoo Finance 보조 검색."""
+    try:
+        with httpx.Client(timeout=5) as client:
+            response = client.get(
+                "https://query1.finance.yahoo.com/v1/finance/search",
+                params={
+                    "q": q,
+                    "lang": "en-US",
+                    "region": "US",
+                    "quotesCount": 8,
+                    "newsCount": 0,
+                },
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            response.raise_for_status()
+        us_exchange_codes = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "PNK", "OQB", "OQX"}
+        quotes = [
+            item for item in response.json().get("quotes", [])
+            if item.get("quoteType") in ("EQUITY", "ETF")
+            and item.get("exchange") in us_exchange_codes
+            and item.get("symbol")
+        ][:limit]
+        return [
+            (
+                str(item["symbol"]).upper(),
+                str(item.get("longname") or item.get("shortname") or item["symbol"]),
+            )
+            for item in quotes
+        ]
+    except Exception:
+        return []
+
+
+def _search_rank(q_norm: str, ticker: str, name: str) -> int:
+    """정확 티커 → 정확 이름 → 접두어 → 부분 일치 순으로 검색 결과를 정렬한다."""
+    ticker_norm = _normalize(ticker)
+    name_norm = _normalize(name)
+    if ticker_norm == q_norm:
+        return 0
+    if name_norm == q_norm:
+        return 1
+    if ticker_norm.startswith(q_norm):
+        return 2
+    if name_norm.startswith(q_norm):
+        return 3
+    return 4
+
+
 @app.get("/search")
 def search_stocks(q: str = Query(...)):
     q_stripped = q.strip()
@@ -1784,6 +1859,8 @@ def search_stocks(q: str = Query(...)):
         return {"items": []}
 
     q_norm    = _normalize(q_stripped)
+    if not q_norm:
+        return {"items": []}
     cache_key = f"search_{q_norm}"
 
     def fetch():
@@ -1802,9 +1879,11 @@ def search_stocks(q: str = Query(...)):
             code_col = next((c for c in ["Code", "Symbol"] if c in kr_df.columns), None)
             name_col = "Name" if "Name" in kr_df.columns else None
             if code_col and name_col:
+                normalized_names = kr_df[name_col].astype(str).map(_normalize)
+                normalized_codes = kr_df[code_col].astype(str).map(_normalize)
                 mask = (
-                    kr_df[name_col].str.lower().str.contains(q_norm, na=False) |
-                    kr_df[code_col].str.lower().str.contains(q_norm, na=False)
+                    normalized_names.str.contains(q_norm, na=False, regex=False) |
+                    normalized_codes.str.contains(q_norm, na=False, regex=False)
                 )
                 for _, row in kr_df[mask].head(5).iterrows():
                     close = row.get("Close")
@@ -1819,40 +1898,31 @@ def search_stocks(q: str = Query(...)):
         except Exception:
             pass
 
-        # 2. 미국 — 한국어 별칭 매핑 (정확 포함 + 퍼지)
-        kr_matches    = _search_kr_aliases(q_norm)
-        kr_matched_tickers = [t for t, _ in kr_matches]
-        kr_matched_names   = {t: n for t, n in kr_matches}
+        # 2. 미국 — 수동 별칭 + 네이버 한글 자동완성 + Yahoo 보조 검색
+        alias_matches = _search_kr_aliases(q_norm)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            naver_future = executor.submit(_search_naver_us, q_stripped)
+            yahoo_future = executor.submit(_search_yahoo_us, q_stripped)
+            provider_matches = naver_future.result() + yahoo_future.result()
 
-        # 3. 미국 — Yahoo Finance 검색 API (영문 티커·이름)
-        yf_tickers:  list[str]       = []
-        yf_name_map: dict[str, str]  = {}
-        try:
-            yf_search_url = "https://query1.finance.yahoo.com/v1/finance/search"
-            params = {"q": q_stripped, "lang": "en-US", "region": "US",
-                      "quotesCount": 8, "newsCount": 0}
-            with httpx.Client(timeout=5) as client:
-                resp = client.get(yf_search_url, params=params,
-                                  headers={"User-Agent": "Mozilla/5.0"})
-                resp.raise_for_status()
-            us_exchange_codes = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "PNK", "OQB", "OQX"}
-            quotes = [
-                item for item in resp.json().get("quotes", [])
-                if item.get("quoteType") in ("EQUITY", "ETF")
-                and item.get("exchange") in us_exchange_codes
-                and "symbol" in item
-            ][:5]
-            yf_tickers  = [item["symbol"] for item in quotes
-                           if item["symbol"] not in kr_matched_tickers]
-            yf_name_map = {
-                item["symbol"]: (item.get("longname") or item.get("shortname") or item["symbol"])
-                for item in quotes
-            }
-        except Exception:
-            pass
+        us_matches = alias_matches + provider_matches
 
-        us_tickers = kr_matched_tickers + yf_tickers
-        name_map   = {**yf_name_map, **kr_matched_names}  # 한국어 이름 우선
+        # 검색 공급자가 잠시 실패해도 티커 직접 입력은 가격 조회 후보로 남긴다.
+        direct_candidate = None
+        if _search_re.fullmatch(r"[A-Za-z][A-Za-z0-9.^-]{0,9}", q_stripped):
+            direct_ticker = q_stripped.upper()
+            if all(_normalize(ticker) != _normalize(direct_ticker) for ticker, _ in us_matches):
+                us_matches.append((direct_ticker, direct_ticker))
+                direct_candidate = direct_ticker
+
+        # 앞쪽 공급자(수동 한글 별칭 → 네이버 → Yahoo)의 표시명을 우선한다.
+        name_map: dict[str, str] = {}
+        for ticker, name in us_matches:
+            name_map.setdefault(ticker, name)
+        us_tickers = sorted(
+            name_map,
+            key=lambda ticker: _search_rank(q_norm, ticker, name_map[ticker]),
+        )[:10]
 
         if us_tickers:
             # 가격 조회 (실패해도 종목 자체는 반환)
@@ -1876,6 +1946,10 @@ def search_stocks(q: str = Query(...)):
                         chg = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2)
                 except Exception:
                     pass
+                # 직접 입력 후보는 실제 시세가 있을 때만 보여준다. 영문 단어도 후보가
+                # 되므로, 거르지 않으면 "apple" 검색에 없는 종목 APPLE($0)이 맨 위에 뜬다.
+                if ticker == direct_candidate and price <= 0:
+                    continue
                 add_result({
                     "market":      "US",
                     "ticker":      ticker,
@@ -1884,7 +1958,10 @@ def search_stocks(q: str = Query(...)):
                     "change_rate": chg,
                 })
 
-        return results
+        results.sort(
+            key=lambda item: _search_rank(q_norm, str(item["ticker"]), str(item["name"])),
+        )
+        return results[:12]
 
     return _get_cached(cache_key, fetch)
 
