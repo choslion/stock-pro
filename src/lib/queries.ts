@@ -10,7 +10,7 @@ type Market  = "domestic" | "overseas";
 type EtfMarket = "kr" | "kr_overseas" | "us";
 
 const get = <T>(url: string, params?: Record<string, unknown>) =>
-  axiosInstance.get<T>(url, params ? { params } : undefined).then((r) => r.data);
+  axiosInstance.get<T>(url, { params, suppressErrorToast: true }).then((r) => r.data);
 
 // ── Query Keys ──────────────────────────────────────────────────────────────
 export const Q = {

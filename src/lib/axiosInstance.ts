@@ -1,6 +1,12 @@
 import axios, { AxiosError } from "axios";
 import { useToastStore } from "../store/useToastStore";
 
+declare module "axios" {
+  interface AxiosRequestConfig {
+    suppressErrorToast?: boolean;
+  }
+}
+
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL as string,
   timeout: 61000,
@@ -26,7 +32,11 @@ axiosInstance.interceptors.response.use(
         ?? "알 수 없는 오류가 발생했습니다.";
     }
 
-    useToastStore.getState().addToast(message, "error");
+    // React Query 조회는 자체 재시도와 화면별 최종 오류 UI가 있다.
+    // 첫 번째 일시적 실패를 최종 오류처럼 알리지 않도록 해당 요청의 토스트는 생략한다.
+    if (!error.config?.suppressErrorToast) {
+      useToastStore.getState().addToast(message, "error");
+    }
     console.log(`[API ERROR] ${status ?? "NETWORK_ERROR"}`);
 
     return Promise.reject(error);
