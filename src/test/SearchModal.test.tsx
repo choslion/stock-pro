@@ -25,7 +25,23 @@ beforeEach(() => { mockGet.mockReset() })
 describe('SearchModal', () => {
   it('초기 상태에서 안내 문구를 표시한다', () => {
     renderWithQuery(<SearchModal onClose={vi.fn()} />)
-    expect(screen.getByText('2글자 이상 입력하면 검색합니다')).toBeInTheDocument()
+    expect(screen.getByText('2글자 이상 또는 1글자 티커를 입력해 주세요')).toBeInTheDocument()
+  })
+
+  it('F처럼 한 글자인 미국 티커도 검색한다', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        items: [
+          { ticker: 'F', name: '포드 모터', market: 'US', price: 12, change_rate: 0.2 },
+        ],
+      },
+    })
+
+    renderWithQuery(<SearchModal onClose={vi.fn()} />)
+    await userEvent.type(screen.getByRole('textbox'), 'F')
+
+    await waitFor(() => expect(screen.getByText('포드 모터')).toBeInTheDocument())
+    expect(mockGet).toHaveBeenCalledWith('/search', expect.objectContaining({ params: { q: 'F' } }))
   })
 
   it('2글자 이상 입력하면 검색 API를 호출하고 결과를 표시한다', async () => {

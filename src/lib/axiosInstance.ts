@@ -15,6 +15,10 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
+    // 검색어 변경 등으로 취소한 요청은 실제 네트워크 오류가 아니다.
+    // axios.isCancel은 타입 가드라 이후 error를 never로 좁혀버려 code로 판별한다.
+    if (error.code === AxiosError.ERR_CANCELED) return Promise.reject(error);
+
     const status = error.response?.status;
 
     let message: string;

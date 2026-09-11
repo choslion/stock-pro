@@ -16,6 +16,11 @@ export interface SearchResultItem {
   change_rate: number;
 }
 
+function isSearchableQuery(value: string) {
+  const query = value.trim();
+  return query.length >= 2 || /^[a-z]$/i.test(query);
+}
+
 interface ResultItemProps {
   item:    SearchResultItem;
   onClick: () => void;
@@ -120,16 +125,35 @@ export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }:
   /* ── 검색 (400ms 디바운스) ── */
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) { setResults([]); setSearched(false); return; }
+    if (!isSearchableQuery(q)) {
+      setResults([]);
+      setSearched(false);
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
     const timer = setTimeout(() => {
       setLoading(true);
       axiosInstance
-        .get<{ items: SearchResultItem[] }>("/search", { params: { q } })
+        .get<{ items: SearchResultItem[] }>("/search", {
+          params: { q },
+          signal: controller.signal,
+        })
         .then((res) => { setResults(res.data.items ?? []); setSearched(true); })
-        .catch(() => { setResults([]); setSearched(true); })
-        .finally(() => setLoading(false));
+        .catch((error) => {
+          if (error?.code !== "ERR_CANCELED") {
+            setResults([]);
+            setSearched(true);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
     }, 400);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [query]);
 
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
@@ -161,7 +185,7 @@ export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }:
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="종목명 또는 티커 (예: 삼성전자, AAPL)"
+            placeholder="종목명 또는 티커 (예: 삼성전자, 엔비디아, AAPL)"
             aria-label="종목 검색어 입력"
             className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 outline-none"
           />
@@ -188,9 +212,9 @@ export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }:
         <div className="max-h-[60vh] overflow-y-auto" role="region" aria-label="검색 결과" aria-live="polite">
           {loading && <div className="flex justify-center py-8"><Spin /></div>}
 
-          {!loading && query.trim().length < 2 && (
+          {!loading && !isSearchableQuery(query) && (
             <p className="text-center text-gray-500 text-xs py-8">
-              2글자 이상 입력하면 검색합니다
+              2글자 이상 또는 1글자 티커를 입력해 주세요
             </p>
           )}
           {!loading && searched && results.length === 0 && (
