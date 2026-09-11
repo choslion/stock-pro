@@ -4,6 +4,7 @@ import type {
   Sp500Data, CommoditiesData, ForexData, SectorsData, UsSectorsData,
   InvestorTrendsData, DomesticRankingData, OverseasRankingData,
   EtfData, WatchlistData, ThemeKrData, ThemeUsData, NewsData, ChartData, MarketEventsData,
+  MarketEventHistoryData,
 } from "../types/api";
 
 type Market  = "domestic" | "overseas";
@@ -17,6 +18,7 @@ export const Q = {
   usIndices:      () => ["us-indices"]               as const,
   kospi:          () => ["kospi"]                    as const,
   marketEvents:   () => ["market-events"]            as const,
+  marketEventHistory: () => ["market-event-history"] as const,
   vix:            () => ["vix"]                      as const,
   fgi:            () => ["fgi"]                      as const,
   score:          () => ["score"]                    as const,
@@ -42,6 +44,7 @@ export const fetchers = {
   usIndices:      () => get<UsIndicesData>("/us-indices"),
   kospi:          () => get<KospiData>("/kospi"),
   marketEvents:   () => get<MarketEventsData>("/market-events"),
+  marketEventHistory: () => get<MarketEventHistoryData>("/market-event-history"),
   vix:            () => get<VixData>("/vix"),
   fgi:            () => get<FgiData>("/fgi"),
   score:          () => get<ScoreData>("/score"),

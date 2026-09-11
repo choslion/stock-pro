@@ -48,6 +48,19 @@ export interface MarketEventsData {
   today_events:  MarketEvent[];
 }
 
+export interface MarketEventHistoryData {
+  as_of:         string;
+  searched_from: string;
+  source:        string;
+  source_url:    string;
+  fetched_at:    string;
+  available:     boolean;
+  latest_events: {
+    sidecar:         MarketEvent | null;
+    circuit_breaker: MarketEvent | null;
+  };
+}
+
 // ── /vix ─────────────────────────────────────────────────────────────────────
 export interface VixData {
   value: string;

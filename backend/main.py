@@ -458,6 +458,8 @@ _KRX_MARKET_ACTION_PAGE = (
 )
 _KRX_EVENT_SEARCH_TERMS = ("CB발동", "Sidecar발동", "사이드카")
 _KST = _timezone(timedelta(hours=9))
+_KRX_EVENT_HISTORY_YEARS = 20
+_KRX_EVENT_HISTORY_WINDOW_DAYS = 365 * 2
 
 
 def _parse_krx_market_event_rows(content: bytes) -> list[dict]:
@@ -621,11 +623,124 @@ def _fetch_krx_market_events(now: datetime | None = None) -> dict:
     }
 
 
+def _fetch_krx_market_event_history(now: datetime | None = None) -> dict:
+    """KIND 과거 공시에서 사이드카·서킷브레이커의 최근 발동 기록을 찾는다."""
+    now = now or datetime.now(_KST)
+    to_date = now.strftime("%Y-%m-%d")
+    oldest_date = now - timedelta(days=365 * _KRX_EVENT_HISTORY_YEARS)
+    searched_from = to_date
+    common_payload = {
+        "method": "searchDetailsSub",
+        "currentPageSize": "100",
+        "pageIndex": "1",
+        "orderMode": "",
+        "orderStat": "",
+        "forward": "details_sub",
+        "disclosureType02": "",
+        "pDisclosureType02": "",
+        "searchCodeType": "",
+        "repIsuSrtCd": "",
+        "allRepIsuSrtCd": "",
+        "oldSearchCorpName": "",
+        "disclosureType": "",
+        "disTypevalue": "",
+        "reportCd": "",
+        "searchCorpName": "",
+        "business": "",
+        "marketType": "",
+        "kosdaqSegment": "",
+        "settlementMonth": "",
+        "securities": "",
+        "submitOblgNm": "",
+        "enterprise": "",
+        "reportNmPop": "",
+        "bfrDsclsType": "on",
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": _KRX_MARKET_ACTION_PAGE,
+        "Accept-Language": "ko-KR,ko;q=0.9",
+    }
+    base = {
+        "as_of": to_date,
+        "source": "KRX KIND",
+        "source_url": _KRX_MARKET_ACTION_PAGE,
+    }
+
+    found = {}
+    try:
+        with httpx.Client(timeout=12, follow_redirects=True, headers=headers) as client:
+            window_end = now
+            while window_end >= oldest_date:
+                window_start = max(
+                    oldest_date,
+                    window_end - timedelta(days=_KRX_EVENT_HISTORY_WINDOW_DAYS),
+                )
+                searched_from = window_start.strftime("%Y-%m-%d")
+                kinds_found = {event["kind"] for event in found.values()}
+                terms = tuple(
+                    term for term in _KRX_EVENT_SEARCH_TERMS
+                    if (term == "CB발동" and "circuit_breaker" not in kinds_found)
+                    or (term != "CB발동" and "sidecar" not in kinds_found)
+                )
+                for term in terms:
+                    payload = {
+                        **common_payload,
+                        "fromDate": searched_from,
+                        "toDate": window_end.strftime("%Y-%m-%d"),
+                        "reportNm": term,
+                        "reportNmTemp": term,
+                    }
+                    response = client.post(_KRX_MARKET_ACTION_URL, data=payload)
+                    response.raise_for_status()
+                    for event in _parse_krx_market_event_rows(response.content):
+                        found[event["id"]] = event
+
+                if {event["kind"] for event in found.values()} == {"sidecar", "circuit_breaker"}:
+                    break
+                window_end = window_start - timedelta(days=1)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        # 실패를 결과로 돌려주면 _get_cached가 6시간 동안 그대로 캐시해, 그 사이 KIND가
+        # 살아나도 다시 확인하지 않는다. 예외로 올려 캐시에 남기지 않는다.
+        # SWR 백그라운드 갱신 중의 실패는 이전 성공 결과를 그대로 유지한다.
+        raise HTTPException(503, "KRX 시장조치 이력을 확인할 수 없습니다.") from exc
+
+    events = [
+        _with_market_event_status(event, now)
+        for event in sorted(found.values(), key=lambda item: item["occurred_at"], reverse=True)
+    ]
+    return {
+        **base,
+        "searched_from": searched_from,
+        "available": True,
+        "latest_events": {
+            "sidecar": next((event for event in events if event["kind"] == "sidecar"), None),
+            "circuit_breaker": next(
+                (event for event in events if event["kind"] == "circuit_breaker"), None
+            ),
+        },
+    }
+
+
 @app.get("/market-events")
 def get_market_events():
     # KIND 메인 공시가 10초 주기로 갱신되므로 전용 짧은 TTL을 사용한다.
     # 일반 지표처럼 SWR로 한 주기를 더 기다리지 않고 10초가 지나면 동기 확인한다.
     return _get_cached("market_events", _fetch_krx_market_events, ttl=10, hard_ttl=10)
+
+
+@app.get("/market-event-history")
+def get_market_event_history():
+    # 과거의 마지막 기록은 장중에도 자주 바뀌지 않는다. 실시간 경보 폴링과 분리해
+    # 국내 탭에서만 불러오고 6시간 동안 재사용한다.
+    return _get_cached(
+        "market_event_history",
+        _fetch_krx_market_event_history,
+        ttl=6 * 60 * 60,
+        hard_ttl=24 * 60 * 60,
+    )
 
 
 @app.get("/vix")
