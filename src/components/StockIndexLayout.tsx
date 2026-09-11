@@ -163,7 +163,7 @@ export default function StockIndexDashboard() {
       queryClient.prefetchQuery({ queryKey: Q.usSectors(),   queryFn: fetchers.usSectors   });
       // 시장 > 테마 탭 (첫 번째 테마)
       const t0 = THEMES[0];
-      if (t0.kr_stocks.length)     queryClient.prefetchQuery({ queryKey: Q.themeKr(t0.id), queryFn: () => fetchers.themeKr(t0.kr_stocks.map((s) => s.ticker).join(",")) });
+      if (t0.kr_theme_no)          queryClient.prefetchQuery({ queryKey: Q.themeKr(t0.id), queryFn: () => fetchers.themeKr(t0.kr_theme_no, 10) });
       if (t0.us_candidates.length) queryClient.prefetchQuery({ queryKey: Q.themeUs(t0.id), queryFn: () => fetchers.themeUs(t0.us_candidates.map((s) => s.ticker).join(","), 10) });
       // 차트 탭
       queryClient.prefetchQuery({ queryKey: Q.investorTrends(), queryFn: fetchers.investorTrends });

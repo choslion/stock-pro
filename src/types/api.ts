@@ -223,6 +223,20 @@ export interface WatchlistData {
   usd_krw: number;
 }
 
+// ── /kr-theme-stocks ──────────────────────────────────────────────────────────
+export interface ThemeKrStock {
+  rank:        number;
+  ticker:      string;
+  name:        string;
+  price:       number;
+  change_rate: number;
+}
+
+export interface ThemeKrData {
+  items:       ThemeKrStock[];
+  fetched_at?: string;
+}
+
 // ── /theme-ranking ────────────────────────────────────────────────────────────
 export interface ThemeUsStock {
   rank:        number;

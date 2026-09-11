@@ -3,7 +3,7 @@ import type {
   UsIndicesData, KospiData, VixData, FgiData, ScoreData, KrScoreData,
   Sp500Data, CommoditiesData, ForexData, SectorsData, UsSectorsData,
   InvestorTrendsData, DomesticRankingData, OverseasRankingData,
-  EtfData, WatchlistData, ThemeUsData, NewsData, ChartData, MarketEventsData,
+  EtfData, WatchlistData, ThemeKrData, ThemeUsData, NewsData, ChartData, MarketEventsData,
 } from "../types/api";
 
 type Market  = "domestic" | "overseas";
@@ -68,7 +68,7 @@ export const fetchers = {
     return get<EtfData>(ep[market], { type: filter });
   },
 
-  themeKr: (tickers: string)              => get<WatchlistData>("/watchlist",     { kr: tickers }),
+  themeKr: (themeNo: string, limit: number) => get<ThemeKrData>("/kr-theme-stocks", { no: themeNo, limit }),
   themeUs: (tickers: string, limit: number) => get<ThemeUsData>("/theme-ranking", { tickers, limit }),
   watchlist: (params: Record<string, string>) => get<WatchlistData>("/watchlist", params),
   news:      () => get<NewsData>("/news"),

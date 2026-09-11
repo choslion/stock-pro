@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Q, fetchers } from "../lib/queries";
-import type { WatchlistItem } from "../types/api";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
@@ -38,13 +37,11 @@ export default function ThemeSectors() {
 
   const theme = THEMES.find((t) => t.id === themeId) ?? THEMES[0];
 
-  const krTickers = useMemo(() => theme.kr_stocks.map((s) => s.ticker).join(","), [theme]);
   const usTickers = useMemo(() => theme.us_candidates.map((s) => s.ticker).join(","), [theme]);
 
   const krQ = useQuery({
     queryKey: Q.themeKr(themeId),
-    queryFn:  () => fetchers.themeKr(krTickers),
-    enabled:  theme.kr_stocks.length > 0,
+    queryFn:  () => fetchers.themeKr(theme.kr_theme_no, 10),
   });
   const usQ = useQuery({
     queryKey: Q.themeUs(themeId),
@@ -52,12 +49,7 @@ export default function ThemeSectors() {
     enabled:  theme.us_candidates.length > 0,
   });
 
-  const krMap = useMemo<Record<string, WatchlistItem>>(() => {
-    const map: Record<string, WatchlistItem> = {};
-    for (const item of krQ.data?.items ?? []) map[item.ticker] = item;
-    return map;
-  }, [krQ.data]);
-
+  const krStocks  = krQ.data?.items ?? [];
   const usStocks  = usQ.data?.stocks ?? [];
   const usdKrw    = usQ.data?.usd_krw ?? null;
   const fetchedAt = usQ.dataUpdatedAt ? new Date(usQ.dataUpdatedAt) : null;
@@ -126,7 +118,7 @@ export default function ThemeSectors() {
 
       {/* 컬럼 헤더 */}
       <div className="grid grid-cols-12 text-xs text-gray-500 px-2 pb-2 border-b border-gray-700">
-        <span className="col-span-2 whitespace-nowrap">구분</span>
+        <span className="col-span-2 whitespace-nowrap">순위</span>
         <span className="col-span-4">종목명</span>
         <span className="col-span-3 text-right">현재가</span>
         <span className="col-span-3 text-right">등락률</span>
@@ -134,12 +126,12 @@ export default function ThemeSectors() {
 
       <div className="min-h-[420px]">
         {/* 국내 섹션 */}
-        {theme.kr_stocks.length > 0 && (
+        {theme.kr_theme_no && (
           <>
             <SectionHeader>
               <span className="inline-flex items-center gap-1.5">
                 <span className="bg-blue-900/60 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded">KR</span>
-                국내
+                국내 — 실시간 상승률 상위 10
               </span>
             </SectionHeader>
             {krQ.isLoading ? (
@@ -148,24 +140,24 @@ export default function ThemeSectors() {
               <ErrorBlock message={parseError(krQ.error)} onRetry={krQ.refetch} />
             ) : (
               <div className="divide-y divide-gray-700/50">
-                {theme.kr_stocks.map((config) => {
-                  const stock = krMap[config.ticker];
-                  return (
+                {krStocks.map((stock) => (
                     <div
-                      key={config.ticker}
+                      key={stock.ticker}
                       className="grid grid-cols-12 items-center px-2 py-2.5 hover:bg-gray-700/30 transition-colors"
                     >
-                      <span className="col-span-2 text-xs font-semibold text-blue-400">KR</span>
-                      <span className="col-span-4 text-sm font-medium pr-2">{config.name}</span>
+                      <span className="col-span-2 text-xs font-semibold text-blue-400">{stock.rank}</span>
+                      <span className="col-span-4 text-sm font-medium pr-2">{stock.name}</span>
                       <span className="col-span-3 text-right text-sm text-gray-300">
-                        {stock ? (stock.price ?? 0).toLocaleString("ko-KR") + "원" : "-"}
+                        {stock.price.toLocaleString("ko-KR")}원
                       </span>
                       <span className="col-span-3 text-right text-sm">
-                        <ChangeRate value={stock?.change_rate ?? 0} />
+                        <ChangeRate value={stock.change_rate} />
                       </span>
                     </div>
-                  );
-                })}
+                ))}
+                {krStocks.length === 0 && (
+                  <p className="text-gray-500 text-center py-4 text-sm">데이터가 없습니다.</p>
+                )}
               </div>
             )}
           </>

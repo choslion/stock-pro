@@ -7,16 +7,19 @@ export interface Theme {
   id:            string;
   label:         string;
   emoji:         string;
+  kr_theme_no:   string;
   kr_stocks:     ThemeStock[];
   us_candidates: ThemeStock[];
 }
 
 // 분야별 테마 설정
-// - kr_stocks : 고정 표시 (코드 확인 필요 항목은 주석 표시)
+// - kr_theme_no : 네이버 증권 국내 테마 번호 (실시간 상승률 상위 종목 조회)
+// - kr_stocks : 분야 설계 참고용 대표 종목 (화면 순위에는 사용하지 않음)
 // - us_candidates : 자동 선별 풀 — 시가총액·매출성장률·거래량·변동성·R&D 비율로 상위 10개 추출
 export const THEMES: Theme[] = [
   {
     id: "semiconductor", label: "반도체", emoji: "💾",
+    kr_theme_no: "155", // 반도체 대표주(생산)
     kr_stocks: [
       { ticker: "005930", name: "삼성전자" },
       { ticker: "000660", name: "SK하이닉스" },
@@ -40,6 +43,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "ai", label: "인공지능", emoji: "🤖",
+    kr_theme_no: "529", // AI 챗봇(챗GPT 등)
     kr_stocks: [
       { ticker: "035420", name: "NAVER" },       { ticker: "035720", name: "카카오" },
       { ticker: "304100", name: "솔트룩스" },    { ticker: "108860", name: "셀바스AI" },
@@ -58,6 +62,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "datacenter", label: "전기/데이터센터", emoji: "⚡",
+    kr_theme_no: "123", // 전력설비
     kr_stocks: [
       { ticker: "015760", name: "한국전력" },    { ticker: "010120", name: "LS일렉트릭" },
       { ticker: "267260", name: "HD현대일렉트릭" }, { ticker: "298040", name: "효성중공업" },
@@ -75,6 +80,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "security", label: "보안", emoji: "🛡️",
+    kr_theme_no: "55", // 보안주(정보)
     kr_stocks: [
       { ticker: "053800", name: "안랩" },         { ticker: "067920", name: "이글루시큐리티" },
       { ticker: "263860", name: "지니언스" },      { ticker: "170790", name: "파이오링크" },
@@ -92,6 +98,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "quantum", label: "양자컴퓨터", emoji: "⚛️",
+    kr_theme_no: "426", // 양자암호/양자컴퓨팅
     kr_stocks: [
       { ticker: "017670", name: "SK텔레콤" },
       { ticker: "030200", name: "KT" },
@@ -106,6 +113,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "finance", label: "증권", emoji: "📈",
+    kr_theme_no: "151", // 증권
     kr_stocks: [
       { ticker: "006800", name: "미래에셋증권" }, { ticker: "016360", name: "삼성증권" },
       { ticker: "039490", name: "키움증권" },      { ticker: "071050", name: "한국금융지주" },
@@ -123,6 +131,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "space", label: "우주", emoji: "🚀",
+    kr_theme_no: "200", // 우주항공산업
     kr_stocks: [
       { ticker: "012450", name: "한화에어로스페이스" }, { ticker: "047810", name: "한국항공우주" },
       { ticker: "079550", name: "LIG넥스원" },          { ticker: "272210", name: "한화시스템" },
@@ -139,6 +148,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "robot", label: "로봇", emoji: "🦾",
+    kr_theme_no: "99", // 지능형로봇/인공지능(AI)
     kr_stocks: [
       { ticker: "277810", name: "레인보우로보틱스" }, { ticker: "090360", name: "로보스타" },
       { ticker: "056080", name: "유진로봇" },          { ticker: "060280", name: "큐렉소" },
@@ -155,6 +165,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "bio", label: "바이오", emoji: "🧬",
+    kr_theme_no: "241", // 바이오시밀러
     kr_stocks: [
       { ticker: "207940", name: "삼성바이오로직스" }, { ticker: "068270", name: "셀트리온" },
       { ticker: "128940", name: "한미약품" },           { ticker: "000100", name: "유한양행" },

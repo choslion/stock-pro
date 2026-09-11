@@ -31,4 +31,13 @@ describe("query fetchers", () => {
       suppressErrorToast: true,
     });
   });
+
+  it("국내 테마 번호와 표시 개수로 실시간 순위를 요청한다", async () => {
+    await fetchers.themeKr("55", 10);
+
+    expect(mockGet).toHaveBeenCalledWith("/kr-theme-stocks", {
+      params: { no: "55", limit: 10 },
+      suppressErrorToast: true,
+    });
+  });
 });
