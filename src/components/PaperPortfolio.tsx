@@ -197,7 +197,10 @@ export default function PaperPortfolio({ onOpenSearch }: PaperPortfolioProps) {
                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${holding.market === "KR" ? "bg-blue-900/60 text-blue-300" : "bg-yellow-900/60 text-yellow-300"}`}>{holding.market}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{holding.name}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-gray-500">평균 {formatKrwCompact(holding.averagePriceKrw)} · {formatQuantity(holding.quantity)}주</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[11px] text-gray-500 tabular-nums">
+                    <span className="whitespace-nowrap text-gray-400">현재가 {holding.currentPriceKrw === null ? "확인 중" : formatKrwCompact(holding.currentPriceKrw)}</span>
+                    <span className="whitespace-nowrap">· 평균 {formatKrwCompact(holding.averagePriceKrw)} · {formatQuantity(holding.quantity)}주</span>
+                  </p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold text-gray-200 tabular-nums">{formatKrwCompact(holding.currentValue)}</p>
