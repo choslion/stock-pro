@@ -456,6 +456,10 @@ _KRX_MARKET_ACTION_URL = "https://kind.krx.co.kr/disclosure/details.do"
 _KRX_MARKET_ACTION_PAGE = (
     "https://kind.krx.co.kr/disclosure/details.do?method=searchDetailsMain"
 )
+_KRX_MARKET_ACTION_PROXY_URL = os.getenv(
+    "KRX_MARKET_ACTION_PROXY_URL",
+    "https://stock-pro-seven.vercel.app/api/krx-market-events",
+)
 _KRX_MARKET_ACTION_TYPE = "0347|"
 _KRX_DISCLOSURE_TYPE_GROUPS = (
     "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "13", "14", "20"
@@ -554,8 +558,23 @@ def _fetch_krx_market_action_rows(
     client: httpx.Client,
     payload: dict[str, str],
 ) -> list[dict]:
+    # Render's shared egress IP is blocked by KIND's Akamai policy. Vercel uses a
+    # one-minute CDN cache so all app users share one upstream KIND request.
+    try:
+        proxy = httpx.get(
+            _KRX_MARKET_ACTION_PROXY_URL,
+            timeout=12,
+            follow_redirects=True,
+            headers={"User-Agent": "stock-pro-api/1.0"},
+        )
+        proxy.raise_for_status()
+        if b'class="errorpage"' not in proxy.content:
+            return _parse_krx_market_event_rows(proxy.content)
+    except (httpx.HTTPError, ValueError):
+        pass
+
     # KIND's bot protection issues session cookies on the search page. A direct
-    # POST from a server can otherwise return 403 or a 200 HTML error page.
+    # request remains as a fallback for local development or a proxy outage.
     if not client.cookies:
         landing = client.get(_KRX_MARKET_ACTION_PAGE)
         landing.raise_for_status()
