@@ -2283,7 +2283,9 @@ def _clean_ai_text(text: str) -> str:
     return text.strip()
 
 
+_AI_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 _AI_NAME_MAX = 40
+_AI_DAILY_LIMIT = 15
 
 
 def _sanitize_prompt_field(text: str, limit: int) -> str:
@@ -2419,9 +2421,8 @@ Rules:
     try:
         client  = _anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=_AI_MODEL,
             max_tokens=300,
-            extra_body={"temperature": 0.2},  # anthropic 1.x에서 temperature 인자 제거됨
             messages=[{"role": "user", "content": prompt}],
         )
         text = _clean_ai_text(message.content[0].text)
@@ -2532,6 +2533,34 @@ def get_news():
     return data
 
 
+_BRIEFING_BACKOFF_DELAYS = (60, 300, 900)
+_briefing_failure_count = 0
+_briefing_retry_at = 0.0
+_briefing_backoff_lock = threading.Lock()
+_briefing_generation_lock = threading.Lock()
+
+
+def _briefing_retry_remaining(now: float | None = None) -> float:
+    current = time.time() if now is None else now
+    with _briefing_backoff_lock:
+        return max(0.0, _briefing_retry_at - current)
+
+
+def _record_briefing_failure() -> None:
+    global _briefing_failure_count, _briefing_retry_at
+    with _briefing_backoff_lock:
+        _briefing_failure_count += 1
+        delay_index = min(_briefing_failure_count - 1, len(_BRIEFING_BACKOFF_DELAYS) - 1)
+        _briefing_retry_at = time.time() + _BRIEFING_BACKOFF_DELAYS[delay_index]
+
+
+def _reset_briefing_backoff() -> None:
+    global _briefing_failure_count, _briefing_retry_at
+    with _briefing_backoff_lock:
+        _briefing_failure_count = 0
+        _briefing_retry_at = 0.0
+
+
 def _generate_briefing() -> dict:
     """시장 스냅샷 기반 AI 브리핑 생성 (Anthropic API 호출, 수 초 소요)."""
     import anthropic as _anthropic
@@ -2588,9 +2617,8 @@ def _generate_briefing() -> dict:
     try:
         client = _anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=_AI_MODEL,
             max_tokens=768,
-            extra_body={"temperature": 0.2},  # anthropic 1.x에서 temperature 인자 제거됨
             messages=[{"role": "user", "content": prompt}],
         )
         raw = message.content[0].text.strip()
@@ -2635,6 +2663,27 @@ def _generate_briefing() -> dict:
     return {"briefing": text, "fetched_at": fetched_at}
 
 
+def _generate_briefing_attempt() -> dict:
+    """백오프가 끝난 경우에만 브리핑을 생성하고 성공 시 실패 상태를 초기화."""
+    if _briefing_retry_remaining() > 0:
+        raise HTTPException(503, "AI 브리핑 재시도를 잠시 기다리고 있습니다.")
+
+    try:
+        result = _generate_briefing()
+    except Exception:
+        _record_briefing_failure()
+        raise
+
+    _reset_briefing_backoff()
+    return result
+
+
+def _refresh_briefing() -> dict:
+    """백그라운드 갱신과 직접 요청이 Anthropic을 동시에 호출하지 않게 직렬화."""
+    with _briefing_generation_lock:
+        return _generate_briefing_attempt()
+
+
 @app.get("/ai-briefing")
 def get_ai_briefing():
     cache_key = "ai_briefing"
@@ -2648,13 +2697,21 @@ def get_ai_briefing():
     entry = _cache.get(cache_key)
     if entry:
         # SWR: 만료돼도 기존 브리핑을 즉시 반환하고 백그라운드에서 재생성
-        if now - entry["ts"] >= ttl:
-            _refresh_in_background(cache_key, _generate_briefing)
+        if now - entry["ts"] >= ttl and _briefing_retry_remaining(now) <= 0:
+            _refresh_in_background(cache_key, _refresh_briefing)
         return entry["data"]
 
-    result = _generate_briefing()
-    _cache[cache_key] = {"data": result, "ts": now}
-    return result
+    if _briefing_retry_remaining(now) > 0:
+        raise HTTPException(503, "AI 브리핑 재시도를 잠시 기다리고 있습니다.")
+
+    # 콜드 캐시에서 요청이 겹쳐도 최초 생성은 한 번만 수행한다.
+    with _briefing_generation_lock:
+        entry = _cache.get(cache_key)
+        if entry:
+            return entry["data"]
+        result = _generate_briefing_attempt()
+        _cache[cache_key] = {"data": result, "ts": time.time()}
+        return result
 
 
 # ── AI 챗봇 ───────────────────────────────────────────────────────────────────
@@ -2698,12 +2755,15 @@ def _check_rate_limits(client_ip: str):
         raise HTTPException(429, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.")
     _cache[ip_key] = {"ts_list": recent + [now], "ts": now}
 
-    # 전체 일일 100회
+    # 채팅·종목 AI 분석을 합쳐 전체 일일 15회
     today = datetime.now(_timezone.utc).strftime("%Y-%m-%d")
     daily_key = f"rl_daily_{today}"
     count = _cache.get(daily_key, {}).get("count", 0)
-    if count >= 100:
-        raise HTTPException(429, "오늘 질문 한도(100회)에 도달했습니다. 내일 다시 이용해주세요.")
+    if count >= _AI_DAILY_LIMIT:
+        raise HTTPException(
+            429,
+            f"오늘 AI 이용 한도({_AI_DAILY_LIMIT}회)에 도달했습니다. 내일 다시 이용해주세요.",
+        )
     _cache[daily_key] = {"count": count + 1, "ts": now}
 
 
@@ -2750,7 +2810,7 @@ Investment Safety Rules (strictly enforced, no exceptions):
 
     client = _anthropic.Anthropic(api_key=api_key)
     with client.messages.stream(
-        model="claude-haiku-4-5-20251001",
+        model=_AI_MODEL,
         max_tokens=512,
         system=system_prompt,
         messages=messages,
@@ -2806,7 +2866,7 @@ _WARM_TARGETS = [
 ]
 
 # AI 브리핑도 미리 생성해 사용자가 API 호출(수 초)을 기다리지 않게 함.
-# get_ai_briefing은 자체 TTL(장중 2h/장외 6h)이라 워머 주기에는 캐시 히트로 무비용.
+# 자체 TTL(장중 2h/장외 6h)과 실패 백오프(1m→5m→15m)로 불필요한 호출을 막는다.
 if os.environ.get("ANTHROPIC_API_KEY"):
     _WARM_TARGETS.append(("ai_briefing", lambda: get_ai_briefing()))
 
