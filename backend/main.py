@@ -2284,8 +2284,21 @@ def _clean_ai_text(text: str) -> str:
 
 
 _AI_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
+_AI_OUTPUT_CONFIG = {"effort": "low"}
 _AI_NAME_MAX = 40
 _AI_DAILY_LIMIT = 15
+
+
+def _extract_ai_text(message) -> str:
+    """Haiku 5.5의 thinking 블록을 건너뛰고 text 블록만 결합."""
+    text = "".join(
+        block.text
+        for block in message.content
+        if getattr(block, "type", None) == "text" and getattr(block, "text", None)
+    ).strip()
+    if not text:
+        raise ValueError(f"AI 응답에 텍스트가 없습니다. stop_reason={message.stop_reason}")
+    return text
 
 
 def _sanitize_prompt_field(text: str, limit: int) -> str:
@@ -2422,10 +2435,11 @@ Rules:
         client  = _anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
             model=_AI_MODEL,
-            max_tokens=300,
+            max_tokens=600,
+            output_config=_AI_OUTPUT_CONFIG,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = _clean_ai_text(message.content[0].text)
+        text = _clean_ai_text(_extract_ai_text(message))
     except Exception:
         import traceback
         traceback.print_exc()   # 사용자에겐 안내 문구만, 원인은 로그에
@@ -2618,10 +2632,11 @@ def _generate_briefing() -> dict:
         client = _anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
             model=_AI_MODEL,
-            max_tokens=768,
+            max_tokens=1200,
+            output_config=_AI_OUTPUT_CONFIG,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = message.content[0].text.strip()
+        raw = _extract_ai_text(message)
     except Exception:
         import traceback
         traceback.print_exc()   # 사용자에겐 안내 문구만, 원인은 로그에
@@ -2811,7 +2826,8 @@ Investment Safety Rules (strictly enforced, no exceptions):
     client = _anthropic.Anthropic(api_key=api_key)
     with client.messages.stream(
         model=_AI_MODEL,
-        max_tokens=512,
+        max_tokens=1024,
+        output_config=_AI_OUTPUT_CONFIG,
         system=system_prompt,
         messages=messages,
     ) as stream:
