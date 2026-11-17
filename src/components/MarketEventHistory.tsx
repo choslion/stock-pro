@@ -63,7 +63,7 @@ function EventItem({ kind, event }: { kind: "sidecar" | "circuit_breaker"; event
 
 const CARD_PROPS = {
   title: "최근 시장 안전장치",
-  subtitle: "사이드카 · 서킷브레이커 마지막 발동 일시",
+  subtitle: "사이드카 · 서킷브레이커 실제 발동일시 기준",
   icon: ClockIcon,
 };
 
@@ -87,8 +87,7 @@ export default function MarketEventHistory() {
     );
   }
 
-  // 배포 환경에서는 KIND 조회가 막혀 있어 실패가 일상적이다.
-  // 주요 화면에 실패 문구를 계속 띄우기보다 카드를 숨긴다.
+  // 부가 정보이므로 대체소스가 일시적으로 응답하지 않으면 카드를 숨긴다.
   if (!data?.available) return null;
 
   return (
@@ -98,9 +97,9 @@ export default function MarketEventHistory() {
         <EventItem kind="circuit_breaker" event={data.latest_events.circuit_breaker} />
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-gray-500">
-        <span>한국거래소 시장운영공지 기준</span>
+        <span>넥스트레이드 공식 시장안내 · 게시시각이 아닌 발동일시 기준</span>
         <a href={data.source_url} target="_blank" rel="noreferrer" className="font-semibold text-gray-400 underline decoration-gray-600 underline-offset-2 hover:text-white">
-          KRX 원문 확인
+          NXT 원문 확인
         </a>
       </div>
     </Card>

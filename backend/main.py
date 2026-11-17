@@ -452,173 +452,50 @@ def get_kospi():
     return _get_cached("kospi", fetch)
 
 
-_KRX_MARKET_ACTION_URL = "https://kind.krx.co.kr/disclosure/details.do"
-_KRX_MARKET_ACTION_PAGE = (
-    "https://kind.krx.co.kr/disclosure/details.do?method=searchDetailsMain"
-)
-_KRX_MARKET_ACTION_PROXY_URL = os.getenv(
-    "KRX_MARKET_ACTION_PROXY_URL",
-    "https://stock-pro-seven.vercel.app/api/krx-market-events",
-)
-_KRX_MARKET_ACTION_TYPE = "0347|"
-_KRX_DISCLOSURE_TYPE_GROUPS = (
-    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "13", "14", "20"
-)
-_KRX_MARKET_EVENT_HISTORY_BASELINE = (
-    {
-        "id": "20261106000312",
-        "kind": "sidecar",
-        "market": "KOSPI",
-        "direction": "sell",
-        "phase": None,
-        "title": "유가증권시장 매도 사이드카(Side car) 발동",
-        "occurred_at": "2026-11-06T09:34+09:00",
-    },
-    {
-        "id": "20261106000197",
-        "kind": "circuit_breaker",
-        "market": "KOSPI",
-        "direction": None,
-        "phase": 1,
-        "title": "유가증권시장 매매거래 일시중단(1단계 CB 발동)",
-        "occurred_at": "2026-11-06T09:03+09:00",
-    },
-)
+_NXT_MARKET_INFO_URL = "https://nextrade.co.kr/menu/marketInfo/menuList.do"
 _KST = _timezone(timedelta(hours=9))
-_krx_market_action_session: httpx.Client | None = None
-_krx_market_action_lock = threading.Lock()
+_NXT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; stock-pro/1.0)",
+    "Accept-Language": "ko-KR,ko;q=0.9",
+}
 
 
-def _krx_market_action_payload(
-    from_date: str,
-    to_date: str,
-    current_page_size: int,
-) -> dict[str, str]:
-    """Build the same form payload as KIND's detailed-search page."""
-    payload = {
-        "method": "searchDetailsSub",
-        "currentPageSize": str(current_page_size),
-        "pageIndex": "1",
-        "orderMode": "",
-        "orderStat": "",
-        "forward": "details_sub",
-        "searchCodeType": "",
-        "repIsuSrtCd": "",
-        "allRepIsuSrtCd": "",
-        "oldSearchCorpName": "",
-        "disclosureType": "",
-        "disTypevalue": "",
-        "reportNm": "",
-        "reportCd": "",
-        "searchCorpName": "",
-        "business": "",
-        "marketType": "",
-        "kosdaqSegment": "",
-        "settlementMonth": "",
-        "securities": "",
-        "submitOblgNm": "",
-        "enterprise": "",
-        "fromDate": from_date,
-        "toDate": to_date,
-        "reportNmPop": "",
-        "reportNmTemp": "",
-        "bfrDsclsType": "on",
-        "lastReport": "5",
-    }
-    for group in _KRX_DISCLOSURE_TYPE_GROUPS:
-        value = _KRX_MARKET_ACTION_TYPE if group == "02" else ""
-        payload[f"disclosureType{group}"] = value
-        payload[f"pDisclosureType{group}"] = value
-    return payload
-
-
-def _krx_market_action_client(timeout: int) -> httpx.Client:
-    global _krx_market_action_session
-    if _krx_market_action_session is None:
-        _krx_market_action_session = httpx.Client(
-            timeout=timeout,
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/131.0.0.0 Safari/537.36"
-                ),
-                "Accept": "text/html, */*; q=0.01",
-                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
-                "Origin": "https://kind.krx.co.kr",
-                "Referer": _KRX_MARKET_ACTION_PAGE,
-                "X-Requested-With": "XMLHttpRequest",
-            },
-        )
-    return _krx_market_action_session
-
-
-def _fetch_krx_market_action_rows(
-    client: httpx.Client,
-    payload: dict[str, str],
-) -> list[dict]:
-    # Render's shared egress IP is blocked by KIND's Akamai policy. Vercel uses a
-    # one-minute CDN cache so all app users share one upstream KIND request.
-    try:
-        proxy = httpx.get(
-            _KRX_MARKET_ACTION_PROXY_URL,
-            timeout=12,
-            follow_redirects=True,
-            headers={"User-Agent": "stock-pro-api/1.0"},
-        )
-        proxy.raise_for_status()
-        if b'class="errorpage"' not in proxy.content:
-            return _parse_krx_market_event_rows(proxy.content)
-    except (httpx.HTTPError, ValueError):
-        pass
-
-    # KIND's bot protection issues session cookies on the search page. A direct
-    # request remains as a fallback for local development or a proxy outage.
-    if not client.cookies:
-        landing = client.get(_KRX_MARKET_ACTION_PAGE)
-        landing.raise_for_status()
-
-    response = client.post(_KRX_MARKET_ACTION_URL, data=payload)
-    response.raise_for_status()
-    if b'class="errorpage"' in response.content:
-        raise RuntimeError("KIND returned an error page for market-action search")
-    return _parse_krx_market_event_rows(response.content)
-
-
-def _parse_krx_market_event_rows(content: bytes) -> list[dict]:
-    """KIND 상세검색 결과에서 시장 전체 안정장치 공지만 정규화한다."""
+def _parse_nxt_market_event_rows(content: bytes) -> list[dict]:
+    """넥스트레이드 시장안내에서 KRX 사이드카·CB 공지를 정규화한다."""
     import re as _re
     from bs4 import BeautifulSoup as _BS
 
     soup = _BS(content, "html.parser", from_encoding="utf-8")
     events = []
-    for row in soup.select("tbody tr"):
-        cells = row.find_all("td")
-        link = row.select_one("a[onclick*='openDisclsViewer']")
-        if len(cells) < 5 or link is None:
+    for row in soup.select("ul.list-bx li"):
+        link = row.select_one("a[data-nttno]")
+        title_node = row.select_one("p.tit")
+        occurred_node = row.select_one("p.date")
+        if link is None or title_node is None or occurred_node is None:
             continue
 
-        title = link.get("title") or link.get_text(" ", strip=True)
+        title = title_node.get_text(" ", strip=True)
         compact_title = _re.sub(r"\s+", "", title).lower()
-        is_circuit_breaker = "매매거래일시중단" in compact_title and "cb발동" in compact_title
+        is_circuit_breaker = (
+            "매매거래일시중단" in compact_title
+            and "cb" in compact_title
+            and "발동" in compact_title
+        )
         is_sidecar = "sidecar발동" in compact_title or "사이드카" in compact_title
         if not (is_circuit_breaker or is_sidecar):
             continue
 
-        market = "KOSDAQ" if title.startswith("코스닥시장") else "KOSPI"
-        occurred_text = cells[1].get_text(" ", strip=True)
+        market = "KOSDAQ" if title.startswith("코스닥") else "KOSPI"
+        occurred_text = occurred_node.get_text(" ", strip=True)
         try:
             occurred = datetime.strptime(occurred_text, "%Y-%m-%d %H:%M").replace(tzinfo=_KST)
         except ValueError:
             continue
 
-        onclick = link.get("onclick", "")
-        receipt_match = _re.search(r"openDisclsViewer\('(\d+)'", onclick)
-        receipt_no = receipt_match.group(1) if receipt_match else f"{market}-{occurred_text}"
+        notice_no = link.get("data-nttno") or f"{market}-{occurred_text}"
 
         if is_circuit_breaker:
-            phase_match = _re.search(r"(\d)단계", compact_title)
+            phase_match = _re.search(r"cb(\d)단계", compact_title)
             phase = int(phase_match.group(1)) if phase_match else None
             direction = None
         else:
@@ -626,7 +503,7 @@ def _parse_krx_market_event_rows(content: bytes) -> list[dict]:
             direction = "buy" if "매수" in title else "sell" if "매도" in title else None
 
         events.append({
-            "id": receipt_no,
+            "id": f"nxt-{notice_no}",
             "kind": "circuit_breaker" if is_circuit_breaker else "sidecar",
             "market": market,
             "direction": direction,
@@ -635,6 +512,23 @@ def _parse_krx_market_event_rows(content: bytes) -> list[dict]:
             "occurred_at": occurred.isoformat(timespec="minutes"),
         })
     return events
+
+
+def _fetch_nxt_market_event_rows(search_keyword: str | None = None) -> list[dict]:
+    params = {
+        "pageIndex": "1",
+        "scBbsKndCode": "marketInfo",
+        "searchKeyword": search_keyword or "",
+    }
+    response = httpx.get(
+        _NXT_MARKET_INFO_URL,
+        params=params,
+        timeout=10,
+        follow_redirects=True,
+        headers=_NXT_HEADERS,
+    )
+    response.raise_for_status()
+    return _parse_nxt_market_event_rows(response.content)
 
 
 def _with_market_event_status(event: dict, now: datetime) -> dict:
@@ -677,25 +571,23 @@ def _with_market_event_status(event: dict, now: datetime) -> dict:
 def _fetch_krx_market_events(now: datetime | None = None) -> dict:
     now = now or datetime.now(_KST)
     date_text = now.strftime("%Y-%m-%d")
-    payload = _krx_market_action_payload(date_text, date_text, 15)
 
     base = {
         "as_of": date_text,
-        "source": "KRX KIND",
-        "source_url": _KRX_MARKET_ACTION_PAGE,
+        "source": "NXT 시장안내",
+        "source_url": _NXT_MARKET_INFO_URL,
     }
 
     found = {}
     try:
-        with _krx_market_action_lock:
-            client = _krx_market_action_client(timeout=8)
-            for event in _fetch_krx_market_action_rows(client, payload):
+        for event in _fetch_nxt_market_event_rows():
+            if event["occurred_at"].startswith(date_text):
                 found[event["id"]] = event
     except Exception as exc:
         # 알림 배너는 부가 기능이라 조회에 실패해도 앱 전체를 실패로 만들지 않는다.
         # 503을 내면 프런트가 폴링할 때마다 오류 토스트가 뜬다.
         # 다만 "확인 못 함"과 "오늘 발동 없음"은 다르므로 available로 구분한다.
-        print(f"KRX market actions unavailable: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"NXT market notices unavailable: {type(exc).__name__}: {exc}", file=sys.stderr)
         return {**base, "available": False, "active_events": [], "today_events": []}
 
     today_events = [
@@ -711,23 +603,17 @@ def _fetch_krx_market_events(now: datetime | None = None) -> dict:
 
 
 def _fetch_krx_market_event_history(now: datetime | None = None) -> dict:
-    """KIND 과거 공시에서 사이드카·서킷브레이커의 최근 발동 기록을 찾는다."""
+    """넥스트레이드 시장안내에서 최근 사이드카·CB 발동 기록을 찾는다."""
     now = now or datetime.now(_KST)
     to_date = now.strftime("%Y-%m-%d")
-    found = {event["id"]: dict(event) for event in _KRX_MARKET_EVENT_HISTORY_BASELINE}
-
-    # KIND blocks repeated server-side searches. Keep the last verified official
-    # records locally and merge any newer event already observed by today's live
-    # poll, avoiding another request burst solely for the history card.
-    cached_today = ((_cache.get("market_events") or {}).get("data") or {}).get(
-        "today_events", []
-    )
-    for event in cached_today:
-        found[event["id"]] = {
-            key: value
-            for key, value in event.items()
-            if key not in {"status", "halt_ends_at", "ends_at"}
-        }
+    found = {}
+    try:
+        for keyword in ("Sidecar", "CB"):
+            for event in _fetch_nxt_market_event_rows(keyword):
+                found[event["id"]] = event
+    except Exception as exc:
+        print(f"NXT market notice history unavailable: {type(exc).__name__}: {exc}", file=sys.stderr)
+        raise HTTPException(503, "시장 안전장치 이력을 확인할 수 없습니다.") from exc
 
     events = [
         _with_market_event_status(event, now)
@@ -735,9 +621,12 @@ def _fetch_krx_market_event_history(now: datetime | None = None) -> dict:
     ]
     return {
         "as_of": to_date,
-        "source": "KRX KIND",
-        "source_url": _KRX_MARKET_ACTION_PAGE,
-        "searched_from": "2026-11-06",
+        "source": "NXT 시장안내",
+        "source_url": _NXT_MARKET_INFO_URL,
+        "searched_from": min(
+            (event["occurred_at"][:10] for event in events),
+            default=to_date,
+        ),
         "available": True,
         "latest_events": {
             "sidecar": next((event for event in events if event["kind"] == "sidecar"), None),
@@ -750,8 +639,8 @@ def _fetch_krx_market_event_history(now: datetime | None = None) -> dict:
 
 @app.get("/market-events")
 def get_market_events():
-    # KIND blocks bursty server-side searches. One poll per minute is still fast
-    # enough for a 5-minute sidecar while reusing the same KIND session cookies.
+    # One request per minute is enough to catch a five-minute sidecar while
+    # keeping traffic to the public market-notice page modest.
     return _get_cached("market_events", _fetch_krx_market_events, ttl=60, hard_ttl=60)
 
 

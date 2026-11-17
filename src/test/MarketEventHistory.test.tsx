@@ -46,7 +46,8 @@ describe("MarketEventHistory", () => {
     expect(screen.getByText("12:19")).toBeInTheDocument();
     expect(screen.getByText("KOSPI · 매수 프로그램 호가 정지")).toBeInTheDocument();
     expect(screen.getByText("KOSDAQ · 1단계 · 전체 매매 중단")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "KRX 원문 확인" })).toHaveAttribute("target", "_blank");
+    expect(screen.getByRole("link", { name: "NXT 원문 확인" })).toHaveAttribute("target", "_blank");
+    expect(screen.getByText(/게시시각이 아닌 발동일시 기준/)).toBeInTheDocument();
   });
 
   it("모바일에서 항목이 한 열로 쌓이는 반응형 그리드를 사용한다", async () => {
