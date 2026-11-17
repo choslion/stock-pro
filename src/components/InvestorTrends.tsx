@@ -149,6 +149,7 @@ export default function InvestorTrends() {
 
           <p className="mt-4 border-t border-gray-800 pt-3 text-[11px] leading-relaxed text-gray-500">
             KRX 최종 집계 기준이며 장중에는 직전 거래일 데이터가 표시될 수 있습니다.
+            {data?.individual_amount_estimated && " 개인 금액은 순매수 수량과 종가를 곱한 추정치입니다."}
           </p>
         </>
       )}

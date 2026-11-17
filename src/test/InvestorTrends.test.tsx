@@ -25,6 +25,7 @@ const RESPONSE = {
     as_of: '2026-09-07',
     source: 'Npay 증권',
     fetched_at: '2026-09-07T09:30:00Z',
+    individual_amount_estimated: true,
     investors: {
       foreign: {
         net_buy: [row(1, '005930', '삼성전자', 120_000_000_000)],
@@ -55,6 +56,7 @@ describe('InvestorTrends', () => {
     expect(screen.getByText('외국인 순매수 상위')).toBeInTheDocument()
     expect(screen.getByText('1,200억원')).toHaveClass('text-red-400')
     expect(screen.getByText('2026.09.07 기준')).toBeInTheDocument()
+    expect(screen.getByText(/개인 금액은 순매수 수량과 종가를 곱한 추정치/)).toBeInTheDocument()
   })
 
   it('투자자와 순매도 필터를 즉시 전환한다', async () => {

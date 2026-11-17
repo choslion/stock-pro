@@ -166,10 +166,11 @@ export interface InvestorRankingGroup {
 }
 
 export interface InvestorTrendsData {
-  market:     string;
-  as_of:      string;
-  source:     string;
-  fetched_at: string;
+  market:                      string;
+  as_of:                       string;
+  source:                      string;
+  fetched_at:                  string;
+  individual_amount_estimated?: boolean;
   investors: {
     foreign:     InvestorRankingGroup;
     institution: InvestorRankingGroup;
