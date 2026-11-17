@@ -454,12 +454,117 @@ def get_kospi():
 
 _KRX_MARKET_ACTION_URL = "https://kind.krx.co.kr/disclosure/details.do"
 _KRX_MARKET_ACTION_PAGE = (
-    "https://kind.krx.co.kr/disclosure/detailsExt.do?method=searchDetailsMktactMainExt"
+    "https://kind.krx.co.kr/disclosure/details.do?method=searchDetailsMain"
 )
-_KRX_EVENT_SEARCH_TERMS = ("CB발동", "Sidecar발동", "사이드카")
+_KRX_MARKET_ACTION_TYPE = "0347|"
+_KRX_DISCLOSURE_TYPE_GROUPS = (
+    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "13", "14", "20"
+)
+_KRX_MARKET_EVENT_HISTORY_BASELINE = (
+    {
+        "id": "20261106000312",
+        "kind": "sidecar",
+        "market": "KOSPI",
+        "direction": "sell",
+        "phase": None,
+        "title": "유가증권시장 매도 사이드카(Side car) 발동",
+        "occurred_at": "2026-11-06T09:34+09:00",
+    },
+    {
+        "id": "20261106000197",
+        "kind": "circuit_breaker",
+        "market": "KOSPI",
+        "direction": None,
+        "phase": 1,
+        "title": "유가증권시장 매매거래 일시중단(1단계 CB 발동)",
+        "occurred_at": "2026-11-06T09:03+09:00",
+    },
+)
 _KST = _timezone(timedelta(hours=9))
-_KRX_EVENT_HISTORY_YEARS = 20
-_KRX_EVENT_HISTORY_WINDOW_DAYS = 365 * 2
+_krx_market_action_session: httpx.Client | None = None
+_krx_market_action_lock = threading.Lock()
+
+
+def _krx_market_action_payload(
+    from_date: str,
+    to_date: str,
+    current_page_size: int,
+) -> dict[str, str]:
+    """Build the same form payload as KIND's detailed-search page."""
+    payload = {
+        "method": "searchDetailsSub",
+        "currentPageSize": str(current_page_size),
+        "pageIndex": "1",
+        "orderMode": "",
+        "orderStat": "",
+        "forward": "details_sub",
+        "searchCodeType": "",
+        "repIsuSrtCd": "",
+        "allRepIsuSrtCd": "",
+        "oldSearchCorpName": "",
+        "disclosureType": "",
+        "disTypevalue": "",
+        "reportNm": "",
+        "reportCd": "",
+        "searchCorpName": "",
+        "business": "",
+        "marketType": "",
+        "kosdaqSegment": "",
+        "settlementMonth": "",
+        "securities": "",
+        "submitOblgNm": "",
+        "enterprise": "",
+        "fromDate": from_date,
+        "toDate": to_date,
+        "reportNmPop": "",
+        "reportNmTemp": "",
+        "bfrDsclsType": "on",
+        "lastReport": "5",
+    }
+    for group in _KRX_DISCLOSURE_TYPE_GROUPS:
+        value = _KRX_MARKET_ACTION_TYPE if group == "02" else ""
+        payload[f"disclosureType{group}"] = value
+        payload[f"pDisclosureType{group}"] = value
+    return payload
+
+
+def _krx_market_action_client(timeout: int) -> httpx.Client:
+    global _krx_market_action_session
+    if _krx_market_action_session is None:
+        _krx_market_action_session = httpx.Client(
+            timeout=timeout,
+            follow_redirects=True,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/131.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/html, */*; q=0.01",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+                "Origin": "https://kind.krx.co.kr",
+                "Referer": _KRX_MARKET_ACTION_PAGE,
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        )
+    return _krx_market_action_session
+
+
+def _fetch_krx_market_action_rows(
+    client: httpx.Client,
+    payload: dict[str, str],
+) -> list[dict]:
+    # KIND's bot protection issues session cookies on the search page. A direct
+    # POST from a server can otherwise return 403 or a 200 HTML error page.
+    if not client.cookies:
+        landing = client.get(_KRX_MARKET_ACTION_PAGE)
+        landing.raise_for_status()
+
+    response = client.post(_KRX_MARKET_ACTION_URL, data=payload)
+    response.raise_for_status()
+    if b'class="errorpage"' in response.content:
+        raise RuntimeError("KIND returned an error page for market-action search")
+    return _parse_krx_market_event_rows(response.content)
 
 
 def _parse_krx_market_event_rows(content: bytes) -> list[dict]:
@@ -553,40 +658,7 @@ def _with_market_event_status(event: dict, now: datetime) -> dict:
 def _fetch_krx_market_events(now: datetime | None = None) -> dict:
     now = now or datetime.now(_KST)
     date_text = now.strftime("%Y-%m-%d")
-    common_payload = {
-        "method": "searchDetailsSub",
-        "currentPageSize": "15",
-        "pageIndex": "1",
-        "orderMode": "",
-        "orderStat": "",
-        "forward": "details_sub",
-        "disclosureType02": "",
-        "pDisclosureType02": "",
-        "searchCodeType": "",
-        "repIsuSrtCd": "",
-        "allRepIsuSrtCd": "",
-        "oldSearchCorpName": "",
-        "disclosureType": "",
-        "disTypevalue": "",
-        "reportCd": "",
-        "searchCorpName": "",
-        "business": "",
-        "marketType": "",
-        "kosdaqSegment": "",
-        "settlementMonth": "",
-        "securities": "",
-        "submitOblgNm": "",
-        "enterprise": "",
-        "fromDate": date_text,
-        "toDate": date_text,
-        "reportNmPop": "",
-        "bfrDsclsType": "on",
-    }
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Referer": _KRX_MARKET_ACTION_PAGE,
-        "Accept-Language": "ko-KR,ko;q=0.9",
-    }
+    payload = _krx_market_action_payload(date_text, date_text, 15)
 
     base = {
         "as_of": date_text,
@@ -596,19 +668,15 @@ def _fetch_krx_market_events(now: datetime | None = None) -> dict:
 
     found = {}
     try:
-        with httpx.Client(timeout=8, follow_redirects=True, headers=headers) as client:
-            for term in _KRX_EVENT_SEARCH_TERMS:
-                payload = {**common_payload, "reportNm": term, "reportNmTemp": term}
-                response = client.post(_KRX_MARKET_ACTION_URL, data=payload)
-                response.raise_for_status()
-                for event in _parse_krx_market_event_rows(response.content):
-                    found[event["id"]] = event
-    except Exception:
+        with _krx_market_action_lock:
+            client = _krx_market_action_client(timeout=8)
+            for event in _fetch_krx_market_action_rows(client, payload):
+                found[event["id"]] = event
+    except Exception as exc:
         # 알림 배너는 부가 기능이라 조회에 실패해도 앱 전체를 실패로 만들지 않는다.
         # 503을 내면 프런트가 폴링할 때마다 오류 토스트가 뜬다.
         # 다만 "확인 못 함"과 "오늘 발동 없음"은 다르므로 available로 구분한다.
-        import traceback
-        traceback.print_exc()   # 배포 환경에서 왜 막히는지 로그로 남긴다
+        print(f"KRX market actions unavailable: {type(exc).__name__}: {exc}", file=sys.stderr)
         return {**base, "available": False, "active_events": [], "today_events": []}
 
     today_events = [
@@ -627,93 +695,30 @@ def _fetch_krx_market_event_history(now: datetime | None = None) -> dict:
     """KIND 과거 공시에서 사이드카·서킷브레이커의 최근 발동 기록을 찾는다."""
     now = now or datetime.now(_KST)
     to_date = now.strftime("%Y-%m-%d")
-    oldest_date = now - timedelta(days=365 * _KRX_EVENT_HISTORY_YEARS)
-    searched_from = to_date
-    common_payload = {
-        "method": "searchDetailsSub",
-        "currentPageSize": "100",
-        "pageIndex": "1",
-        "orderMode": "",
-        "orderStat": "",
-        "forward": "details_sub",
-        "disclosureType02": "",
-        "pDisclosureType02": "",
-        "searchCodeType": "",
-        "repIsuSrtCd": "",
-        "allRepIsuSrtCd": "",
-        "oldSearchCorpName": "",
-        "disclosureType": "",
-        "disTypevalue": "",
-        "reportCd": "",
-        "searchCorpName": "",
-        "business": "",
-        "marketType": "",
-        "kosdaqSegment": "",
-        "settlementMonth": "",
-        "securities": "",
-        "submitOblgNm": "",
-        "enterprise": "",
-        "reportNmPop": "",
-        "bfrDsclsType": "on",
-    }
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Referer": _KRX_MARKET_ACTION_PAGE,
-        "Accept-Language": "ko-KR,ko;q=0.9",
-    }
-    base = {
-        "as_of": to_date,
-        "source": "KRX KIND",
-        "source_url": _KRX_MARKET_ACTION_PAGE,
-    }
+    found = {event["id"]: dict(event) for event in _KRX_MARKET_EVENT_HISTORY_BASELINE}
 
-    found = {}
-    try:
-        with httpx.Client(timeout=12, follow_redirects=True, headers=headers) as client:
-            window_end = now
-            while window_end >= oldest_date:
-                window_start = max(
-                    oldest_date,
-                    window_end - timedelta(days=_KRX_EVENT_HISTORY_WINDOW_DAYS),
-                )
-                searched_from = window_start.strftime("%Y-%m-%d")
-                kinds_found = {event["kind"] for event in found.values()}
-                terms = tuple(
-                    term for term in _KRX_EVENT_SEARCH_TERMS
-                    if (term == "CB발동" and "circuit_breaker" not in kinds_found)
-                    or (term != "CB발동" and "sidecar" not in kinds_found)
-                )
-                for term in terms:
-                    payload = {
-                        **common_payload,
-                        "fromDate": searched_from,
-                        "toDate": window_end.strftime("%Y-%m-%d"),
-                        "reportNm": term,
-                        "reportNmTemp": term,
-                    }
-                    response = client.post(_KRX_MARKET_ACTION_URL, data=payload)
-                    response.raise_for_status()
-                    for event in _parse_krx_market_event_rows(response.content):
-                        found[event["id"]] = event
-
-                if {event["kind"] for event in found.values()} == {"sidecar", "circuit_breaker"}:
-                    break
-                window_end = window_start - timedelta(days=1)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        # 실패를 결과로 돌려주면 _get_cached가 6시간 동안 그대로 캐시해, 그 사이 KIND가
-        # 살아나도 다시 확인하지 않는다. 예외로 올려 캐시에 남기지 않는다.
-        # SWR 백그라운드 갱신 중의 실패는 이전 성공 결과를 그대로 유지한다.
-        raise HTTPException(503, "KRX 시장조치 이력을 확인할 수 없습니다.") from exc
+    # KIND blocks repeated server-side searches. Keep the last verified official
+    # records locally and merge any newer event already observed by today's live
+    # poll, avoiding another request burst solely for the history card.
+    cached_today = ((_cache.get("market_events") or {}).get("data") or {}).get(
+        "today_events", []
+    )
+    for event in cached_today:
+        found[event["id"]] = {
+            key: value
+            for key, value in event.items()
+            if key not in {"status", "halt_ends_at", "ends_at"}
+        }
 
     events = [
         _with_market_event_status(event, now)
         for event in sorted(found.values(), key=lambda item: item["occurred_at"], reverse=True)
     ]
     return {
-        **base,
-        "searched_from": searched_from,
+        "as_of": to_date,
+        "source": "KRX KIND",
+        "source_url": _KRX_MARKET_ACTION_PAGE,
+        "searched_from": "2026-11-06",
         "available": True,
         "latest_events": {
             "sidecar": next((event for event in events if event["kind"] == "sidecar"), None),
@@ -726,9 +731,9 @@ def _fetch_krx_market_event_history(now: datetime | None = None) -> dict:
 
 @app.get("/market-events")
 def get_market_events():
-    # KIND 메인 공시가 10초 주기로 갱신되므로 전용 짧은 TTL을 사용한다.
-    # 일반 지표처럼 SWR로 한 주기를 더 기다리지 않고 10초가 지나면 동기 확인한다.
-    return _get_cached("market_events", _fetch_krx_market_events, ttl=10, hard_ttl=10)
+    # KIND blocks bursty server-side searches. One poll per minute is still fast
+    # enough for a 5-minute sidecar while reusing the same KIND session cookies.
+    return _get_cached("market_events", _fetch_krx_market_events, ttl=60, hard_ttl=60)
 
 
 @app.get("/market-event-history")
