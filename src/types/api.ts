@@ -256,13 +256,16 @@ export interface ThemeUsStock {
   rank:        number;
   ticker:      string;
   price_usd:   number;
-  price_krw:   number;
+  price_krw:   number | null;
   change_rate: number;
 }
 
 export interface ThemeUsData {
   stocks:  ThemeUsStock[];
-  usd_krw: number;
+  usd_krw: number | null;
+  fetched_at?: string;
+  ranking_basis?: "market" | "combined";
+  fundamentals_pending?: boolean;
 }
 
 // ── /ai-briefing ─────────────────────────────────────────────────────────────

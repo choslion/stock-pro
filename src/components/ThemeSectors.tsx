@@ -47,12 +47,16 @@ export default function ThemeSectors() {
     queryKey: Q.themeUs(themeId),
     queryFn:  () => fetchers.themeUs(usTickers, 10),
     enabled:  theme.us_candidates.length > 0,
+    refetchInterval: (query) => query.state.data?.fundamentals_pending ? 5_000 : 60_000,
   });
 
   const krStocks  = krQ.data?.items ?? [];
   const usStocks  = usQ.data?.stocks ?? [];
   const usdKrw    = usQ.data?.usd_krw ?? null;
-  const fetchedAt = usQ.dataUpdatedAt ? new Date(usQ.dataUpdatedAt) : null;
+  const fetchedAt = usQ.data?.fetched_at ? new Date(usQ.data.fetched_at) : null;
+  const usRankingBasis = usQ.data?.ranking_basis === "market"
+    ? "거래량·변동성"
+    : "시가총액·매출성장·거래량·변동성·R&D";
 
   const usNameMap = Object.fromEntries(theme.us_candidates.map((s) => [s.ticker, s.name]));
 
@@ -61,14 +65,11 @@ export default function ThemeSectors() {
     ? usValidRates.reduce((a, b) => a + b, 0) / usValidRates.length
     : null;
 
-  function fmtUsPrice(stock: { price_usd: number; price_krw: number } | undefined): string {
-    if (!stock) return "-";
-    if (currency === "usd")
-      return "$" + (stock.price_usd ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return (stock.price_krw ?? 0).toLocaleString("ko-KR") + "원";
+  function fmtUsPrice(stock: { price_usd: number; price_krw: number | null }): string {
+    if (currency === "krw" && stock.price_krw != null)
+      return stock.price_krw.toLocaleString("ko-KR") + "원";
+    return "$" + stock.price_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-
-  const isLoading = krQ.isLoading || usQ.isLoading;
 
   return (
     <Card title="분야별 동향" subtitle="테마별 주요 종목 현황" icon={GridIcon}>
@@ -107,7 +108,10 @@ export default function ThemeSectors() {
         </div>
         {/* 2줄: 환율 (좌) + 기준 시각 (우) */}
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{!isLoading && usdKrw ? `1 USD = ${usdKrw.toLocaleString("ko-KR")}원` : ""}</span>
+          <span>
+            {usdKrw ? `1 USD = ${usdKrw.toLocaleString("ko-KR")}원`
+              : usStocks.length > 0 && currency === "krw" ? "환율 미제공 · 달러로 표시" : ""}
+          </span>
           <span>
             {fetchedAt
               ? fetchedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " 기준"
@@ -169,9 +173,13 @@ export default function ThemeSectors() {
             <SectionHeader>
               <span className="inline-flex items-center gap-1.5">
                 <span className="bg-yellow-900/60 text-yellow-300 text-[10px] font-bold px-1.5 py-0.5 rounded">US</span>
-                해외 — 자동 선별 상위 10 (시가총액·매출성장·거래량·변동성·R&amp;D)
+                해외 — 자동 선별 상위 10
+                {usQ.data && ` (${usRankingBasis})`}
               </span>
             </SectionHeader>
+            {usQ.data?.fundamentals_pending && (
+              <p className="px-2 py-1 text-xs text-gray-400">재무 지표를 반영하는 중이에요.</p>
+            )}
             {usQ.isLoading ? (
               <div className="flex justify-center py-6"><Spin /></div>
             ) : usQ.error && !usQ.data ? (

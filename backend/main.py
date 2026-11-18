@@ -15,6 +15,7 @@ except Exception:
     _krx = None
     _HAS_PYKRX = False
 import time
+import math
 import threading
 import sys, os
 import html as _html
@@ -1543,13 +1544,111 @@ def get_watchlist(kr: str = Query(""), us: str = Query(""), kr_names: str = Quer
     return _get_cached(cache_key, fetch)
 
 
+_THEME_FUNDAMENTALS_TTL = 3600
+_THEME_FUNDAMENTALS_RETRY = 15 * 60
+_THEME_FUNDAMENTALS_QUEUE_LIMIT = 32
+_theme_fundamentals_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="theme-fundamentals")
+_theme_fundamentals_lock = threading.Lock()
+_theme_fundamentals_cache: dict = {}
+_theme_fundamentals_inflight: set[str] = set()
+
+
+def _refresh_theme_fundamentals(ticker: str):
+    data = None
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        market_cap = float(info.get("marketCap") or 0)
+        growth = float(info.get("revenueGrowth") or 0) * 100
+        revenue = float(info.get("totalRevenue") or 0)
+        rd_ratio = None
+        if revenue > 0:
+            try:
+                financials = stock.financials
+                key = next((key for key in financials.index if "Research" in str(key)), None)
+                if key:
+                    ratio = abs(float(financials.loc[key].iloc[0])) / revenue * 100
+                    if math.isfinite(ratio):
+                        rd_ratio = ratio
+            except Exception:
+                pass
+        if market_cap > 0 and math.isfinite(market_cap):
+            data = (market_cap, growth if math.isfinite(growth) else 0.0, rd_ratio)
+    except Exception:
+        pass
+    finally:
+        with _theme_fundamentals_lock:
+            previous, _ = _theme_fundamentals_cache.get(ticker, (None, 0))
+            ttl = _THEME_FUNDAMENTALS_TTL if data is not None else _THEME_FUNDAMENTALS_RETRY
+            _theme_fundamentals_cache[ticker] = (data if data is not None else previous, time.monotonic() + ttl)
+            _theme_fundamentals_inflight.discard(ticker)
+
+
+def _get_theme_fundamentals(tickers: list[str]):
+    snapshot = {}
+    pending = False
+    now = time.monotonic()
+    with _theme_fundamentals_lock:
+        for ticker in tickers:
+            data, refresh_after = _theme_fundamentals_cache.get(ticker, (None, 0))
+            if data is not None:
+                snapshot[ticker] = data
+            if now < refresh_after:
+                continue
+            if ticker not in _theme_fundamentals_inflight and len(_theme_fundamentals_inflight) < _THEME_FUNDAMENTALS_QUEUE_LIMIT:
+                _theme_fundamentals_inflight.add(ticker)
+                _theme_fundamentals_pool.submit(_refresh_theme_fundamentals, ticker)
+            pending = pending or data is None
+    return snapshot, pending
+
+
+def _fetch_theme_quotes(tickers: list[str]):
+    # 같은 일괄 요청에서 환율도 얻어 시세 응답에 별도의 네트워크 왕복이 생기지 않게 한다.
+    raw = yf.download([*tickers, "USDKRW=X"], period="1y", auto_adjust=True, progress=False, timeout=5)
+    if raw.empty or "Close" not in raw or "Volume" not in raw:
+        raise HTTPException(503, "해외 테마 시세를 가져올 수 없습니다.")
+
+    close, volume = raw["Close"], raw["Volume"]
+    quotes = []
+    for ticker in tickers:
+        if ticker not in close or ticker not in volume:
+            continue
+        prices = close[ticker].dropna()
+        volumes = volume[ticker].dropna()
+        if len(prices) < 2 or prices.iloc[-2] <= 0 or prices.iloc[-1] <= 0:
+            continue
+        price = float(prices.iloc[-1])
+        change = (price / float(prices.iloc[-2]) - 1) * 100
+        volatility = float(prices.pct_change().std()) * (252 ** 0.5) * 100
+        avg_volume = float(volumes.tail(20).mean())
+        if math.isfinite(price) and math.isfinite(change):
+            quotes.append((ticker, price, change,
+                           avg_volume if math.isfinite(avg_volume) else 0.0,
+                           volatility if math.isfinite(volatility) else 0.0))
+    if not quotes:
+        raise HTTPException(503, "해외 테마 시세를 가져올 수 없습니다.")
+
+    fx = close["USDKRW=X"].dropna() if "USDKRW=X" in close else pd.Series(dtype=float)
+    rate = float(fx.iloc[-1]) if not fx.empty else 0.0
+    usd_krw = round(rate, 2) if rate > 0 and math.isfinite(rate) else None
+    fetched_at = datetime.now(_timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return quotes, usd_krw, fetched_at
+
+
 @app.get("/theme-ranking")
 def get_theme_ranking(tickers: str = Query(...), limit: int = Query(10)):
-    ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
+    ticker_list = list(dict.fromkeys(t.strip().upper() for t in tickers.split(",") if t.strip()))
     if not ticker_list:
         return {"usd_krw": None, "stocks": []}
-
-    cache_key = f"theme_ranking_{','.join(sorted(ticker_list))}_{limit}"
+    if len(ticker_list) > 25:
+        raise HTTPException(400, "테마 종목은 한 번에 최대 25개까지 조회할 수 있습니다.")
+    limit = min(max(limit, 1), 25)
+    quote_tickers = sorted(ticker_list)
+    quotes, usd_krw, fetched_at = _cached_raw(
+        f"theme_quotes_{','.join(quote_tickers)}", lambda: _fetch_theme_quotes(quote_tickers),
+    )
+    rows_by_ticker = {quote[0]: quote for quote in quotes}
+    fundamentals, pending = _get_theme_fundamentals([ticker for ticker in ticker_list if ticker in rows_by_ticker])
 
     def norm_list(values):
         mn, mx = min(values), max(values)
@@ -1557,124 +1656,44 @@ def get_theme_ranking(tickers: str = Query(...), limit: int = Query(10)):
             return [0.5] * len(values)
         return [(v - mn) / (mx - mn) for v in values]
 
-    def fetch():
-        # 1. Bulk OHLCV — 1년치
-        dl_arg = ticker_list if len(ticker_list) > 1 else ticker_list[0]
-        raw = yf.download(dl_arg, period="1y", auto_adjust=True, progress=False)
-        if raw.empty:
-            raise HTTPException(503, "데이터를 가져올 수 없습니다.")
+    # 수집 도중에는 시세 지표만 사용해 종목마다 재무 수집 속도가 순위에 영향을 주지 않게 한다.
+    use_fundamentals = bool(fundamentals) and not pending
+    rows = []
+    metrics = []
+    for ticker in ticker_list:
+        if ticker not in rows_by_ticker:
+            continue
+        _, price, change, avg_volume, volatility = rows_by_ticker[ticker]
+        market_cap, growth, rd = fundamentals.get(ticker, (0, 0, None)) if use_fundamentals else (0, 0, None)
+        metrics.append((market_cap, max(growth, -50.0), avg_volume, volatility, rd or 0))
+        price_usd = round(price, 2)
+        rows.append({
+            "ticker": ticker,
+            "price_usd": price_usd,
+            "price_krw": int(round(price_usd * usd_krw)) if usd_krw is not None else None,
+            "change_rate": round(change, 2),
+            "revenue_growth_pct": round(growth, 1) if use_fundamentals and ticker in fundamentals else None,
+            "volatility_pct": round(volatility, 1),
+            "rd_ratio_pct": round(rd, 1) if rd is not None else None,
+        })
 
-        close = raw["Close"] if len(ticker_list) > 1 else raw["Close"].to_frame(name=ticker_list[0])
-        volume = raw["Volume"] if len(ticker_list) > 1 else raw["Volume"].to_frame(name=ticker_list[0])
-
-        # 2. 펀더멘털 — 동시 요청
-        def _get_ticker_data(ticker):
-            try:
-                t = yf.Ticker(ticker)
-                info = t.info
-                rd_ratio = None
-                try:
-                    fin = t.financials
-                    if fin is not None and not fin.empty:
-                        rd_key = next((k for k in fin.index if "Research" in str(k)), None)
-                        if rd_key:
-                            rd_val = fin.loc[rd_key].iloc[0]
-                            rev = float(info.get("totalRevenue", 0) or 0)
-                            if pd.notna(rd_val) and rev > 0:
-                                rd_ratio = abs(float(rd_val)) / rev
-                except Exception:
-                    pass
-                return ticker, info, rd_ratio
-            except Exception:
-                return ticker, {}, None
-
-        info_map = {}
-        rd_map = {}
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futs = {ex.submit(_get_ticker_data, t): t for t in ticker_list}
-            for fut in as_completed(futs):
-                ticker, info, rd = fut.result()
-                info_map[ticker] = info
-                rd_map[ticker] = rd
-
-        # 3. 지표 계산
-        rows = []
-        for ticker in ticker_list:
-            try:
-                c = close[ticker].dropna()
-                v = volume[ticker].dropna()
-                if len(c) < 20:
-                    continue
-
-                price = float(c.iloc[-1])
-                chg = round((price - float(c.iloc[-2])) / float(c.iloc[-2]) * 100, 2)
-
-                daily_ret = c.pct_change().dropna()
-                volatility = float(daily_ret.std()) * (252 ** 0.5) * 100  # 연환산 %
-
-                avg_vol = float(v.tail(20).mean())
-
-                info = info_map.get(ticker, {})
-                market_cap = float(info.get("marketCap", 0) or 0)
-                rev_growth = float(info.get("revenueGrowth", 0) or 0) * 100  # %
-
-                rows.append({
-                    "ticker": ticker,
-                    "price_usd": round(price, 2),
-                    "change_rate": chg,
-                    "_market_cap": market_cap,
-                    "_rev_growth": max(rev_growth, -50.0),  # -50% 하한
-                    "_avg_volume": avg_vol,
-                    "_volatility": volatility,
-                    "_rd_ratio": (rd_map.get(ticker) or 0) * 100,
-                    "revenue_growth_pct": round(rev_growth, 1),
-                    "volatility_pct": round(volatility, 1),
-                    "rd_ratio_pct": round(rd_map.get(ticker, 0) * 100, 1) if rd_map.get(ticker) else None,
-                })
-            except Exception:
-                continue
-
-        if not rows:
-            raise HTTPException(503, "스코어링 데이터를 가져올 수 없습니다.")
-
-        # 4. 정규화 & 스코어
-        has_rd = any(r["_rd_ratio"] > 0 for r in rows)
-        nc = norm_list([r["_market_cap"] for r in rows])
-        ng = norm_list([r["_rev_growth"] for r in rows])
-        nv = norm_list([r["_avg_volume"] for r in rows])
-        nvt = norm_list([r["_volatility"] for r in rows])
-        nrd = norm_list([r["_rd_ratio"] for r in rows]) if has_rd else [0.0] * len(rows)
-
-        if has_rd:
-            w = (0.30, 0.25, 0.20, 0.15, 0.10)
-        else:
-            w = (0.35, 0.30, 0.22, 0.13, 0.0)
-
-        for i, r in enumerate(rows):
-            r["score"] = round(
-                w[0] * nc[i] + w[1] * ng[i] + w[2] * nv[i] + w[3] * nvt[i] + w[4] * nrd[i], 4
-            )
-            for k in ("_market_cap", "_rev_growth", "_avg_volume", "_volatility", "_rd_ratio"):
-                r.pop(k, None)
-
-        rows.sort(key=lambda x: x["score"], reverse=True)
-        top = rows[:limit]
-
-        usd_krw = _get_usd_krw()
-        for i, r in enumerate(top, 1):
-            r["rank"] = i
-            r["price_krw"] = int(round(r["price_usd"] * usd_krw))
-
-        return {"usd_krw": usd_krw, "stocks": top}
-
-    # 펀더멘털 캐시는 1시간
-    now = time.time()
-    entry = _cache.get(cache_key)
-    if entry and now - entry["ts"] < 3600:
-        return entry["data"]
-    data = fetch()
-    _cache[cache_key] = {"data": data, "ts": now}
-    return data
+    if not use_fundamentals:
+        weights = (0, 0, 22 / 35, 13 / 35, 0)
+    elif any(metric[-1] > 0 for metric in metrics):
+        weights = (0.30, 0.25, 0.20, 0.15, 0.10)
+    else:
+        weights = (0.35, 0.30, 0.22, 0.13, 0)
+    normalized_metrics = [norm_list(values) for values in zip(*metrics)]
+    for row, values in zip(rows, zip(*normalized_metrics)):
+        row["score"] = round(sum(weight * value for weight, value in zip(weights, values)), 4)
+    rows.sort(key=lambda row: row["score"], reverse=True)
+    return {
+        "usd_krw": usd_krw,
+        "stocks": [{"rank": rank, **row} for rank, row in enumerate(rows[:limit], 1)],
+        "fetched_at": fetched_at,
+        "ranking_basis": "combined" if use_fundamentals else "market",
+        "fundamentals_pending": pending,
+    }
 
 
 def _fetch_us_ranking_raw() -> dict:
@@ -1992,56 +2011,61 @@ def get_kr_theme_stocks(no: str = Query(...), limit: int = Query(10)):
     if not no.isdigit():
         raise HTTPException(400, "올바른 테마 번호가 아닙니다.")
     limit = min(max(limit, 1), 20)
-    cache_key = f"kr_theme_{no}_{limit}"
+    cache_key = f"kr_theme_{no}"
 
     def fetch():
         url = f"https://stock.naver.com/api/domestic/market/theme/{no}/stocklist"
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": f"https://stock.naver.com/market/stock/kr/theme/{no}",
+        }
+        result = {}
+        cursors = set()
+        params = {}
         try:
-            with httpx.Client(timeout=10) as client:
-                response = client.get(
-                    url,
-                    params={
-                        "marketType": "ALL",
-                        "orderType": "up",
-                        "startIdx": 0,
-                        "pageSize": limit,
-                    },
-                    headers={
-                        "User-Agent": "Mozilla/5.0",
-                        "Referer": f"https://stock.naver.com/market/stock/kr/theme/1?no={no}",
-                    },
-                )
-                response.raise_for_status()
-            rows = response.json()
-        except Exception as exc:
+            with httpx.Client(headers=headers, timeout=5) as client:
+                for _ in range(20):
+                    response = client.get(url, params=params)
+                    response.raise_for_status()
+                    page = response.json()
+                    for row in page["items"]:
+                        try:
+                            ticker = str(row["itemCode"])
+                            name = str(row["itemName"])
+                            price = int(row["krx"]["currentPrice"])
+                            change_rate = float(row["krx"]["changeRate"])
+                        except (KeyError, TypeError, ValueError):
+                            continue
+                        if math.isfinite(change_rate):
+                            result[ticker] = {
+                                "ticker": ticker,
+                                "name": name,
+                                "price": price,
+                                "change_rate": change_rate,
+                            }
+                    if not page["hasNext"]:
+                        break
+                    cursor = page["cursor"]
+                    if not cursor or cursor in cursors:
+                        raise ValueError("Invalid theme stock cursor")
+                    cursors.add(cursor)
+                    params = {"cursor": cursor}
+                else:
+                    raise ValueError("Too many theme stock pages")
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
             raise HTTPException(503, "국내 테마 순위를 가져올 수 없습니다.") from exc
-
-        result = []
-        for row in rows if isinstance(rows, list) else []:
-            try:
-                ticker = str(row["itemcode"])
-                name = str(row["itemname"])
-                price = int(float(row["nowPrice"]))
-                change_rate = float(row["prevChangeRate"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            result.append({
-                "ticker": ticker,
-                "name": name,
-                "price": price,
-                "change_rate": round(change_rate, 2),
-            })
 
         if not result:
             raise HTTPException(503, "국내 테마 순위를 가져올 수 없습니다.")
 
-        result.sort(key=lambda item: item["change_rate"], reverse=True)
+        ranked = sorted(result.values(), key=lambda item: item["change_rate"], reverse=True)
         return [
-            {"rank": rank, **item}
-            for rank, item in enumerate(result[:limit], 1)
+            {"rank": rank, **item, "change_rate": round(item["change_rate"], 2)}
+            for rank, item in enumerate(ranked[:20], 1)
         ]
 
-    return _get_cached(cache_key, fetch)
+    data = _get_cached(cache_key, fetch)
+    return {**data, "items": data["items"][:limit]}
 
 
 # ── AI 시황 브리핑 ────────────────────────────────────────────────────────────
