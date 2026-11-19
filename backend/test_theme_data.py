@@ -42,6 +42,36 @@ class ThemeDataTests(unittest.TestCase):
         })
         self.assertEqual([row["ticker"] for row in all_items["items"]], ["000660", "005930", "000990"])
 
+    def test_korean_ranking_waits_for_rates_before_open(self):
+        rate = None
+        client_class = httpx.Client
+
+        def respond(request):
+            return httpx.Response(200, json={
+                "items": [{
+                    "itemCode": "035420", "itemName": "NAVER",
+                    "krx": {"currentPrice": "170300", "changeRate": rate},
+                }],
+                "hasNext": False,
+            })
+
+        def create_client(**kwargs):
+            return client_class(transport=httpx.MockTransport(respond), **kwargs)
+
+        with (
+            patch.object(main.httpx, "Client", side_effect=create_client),
+            patch.object(main, "_cache", {}),
+        ):
+            before_open = main.get_kr_theme_stocks("529", 10)
+            main._cache.clear()
+            rate = "0.00"
+            after_open = main.get_kr_theme_stocks("529", 10)
+
+        self.assertEqual(before_open["items"], [])
+        self.assertEqual(after_open["items"], [{
+            "rank": 1, "ticker": "035420", "name": "NAVER", "price": 170300, "change_rate": 0.0,
+        }])
+
     def test_us_quotes_return_before_fundamentals_and_are_reused_for_final_ranking(self):
         prices = pd.DataFrame({
             ("Close", "AAA"): [10.0, 11.0, 12.0] * 8,

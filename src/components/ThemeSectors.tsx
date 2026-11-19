@@ -160,7 +160,9 @@ export default function ThemeSectors() {
                     </div>
                 ))}
                 {krStocks.length === 0 && (
-                  <p className="text-gray-500 text-center py-4 text-sm">데이터가 없습니다.</p>
+                  <p role="status" className="text-gray-400 text-center py-4 text-sm">
+                    당일 등락률이 아직 집계되지 않았어요. 시세가 들어오면 자동으로 갱신돼요.
+                  </p>
                 )}
               </div>
             )}

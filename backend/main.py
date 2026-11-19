@@ -824,42 +824,95 @@ def _fetch_listing(market: str) -> pd.DataFrame:
     return df
 
 
+_KR_RANKING_SORTS = {
+    "amount": ("tradingValueDesc", "tradingValue"),
+    "volume": ("tradingVolumeDesc", "tradingVolume"),
+    "rising": ("changeRateDescUpAll", "changeRate"),
+    "falling": ("changeRateDescDownAll", "changeRate"),
+}
+
+
+def _fetch_stock_ranking(ranking: str, market: str, limit: int) -> list[dict]:
+    listing_type, sort_field = _KR_RANKING_SORTS[ranking]
+    url = "https://stock.naver.com/api/stockSecurity/individual-stocks/v3/domestic"
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://stock.naver.com/market/stock/kr/stocklist",
+    }
+
+    def fetch_market(market_type: str | None):
+        params = {
+            "exchangeType": "krx",
+            "listingType": listing_type,
+            "size": min(100, max(limit, 40)),
+            "index": 0,
+        }
+        if market_type:
+            params["marketType"] = market_type
+        stocks = {}
+        while len(stocks) < limit:
+            response = client.get(url, params=params)
+            response.raise_for_status()
+            page = response.json()
+            items = page["items"]
+            if not isinstance(items, list):
+                raise ValueError("Invalid domestic stock ranking items")
+            previous_count = len(stocks)
+            for item in items:
+                try:
+                    quote = item["krx"]
+                    if int(quote["tradingVolume"]) <= 0:
+                        continue
+                    ticker = item["itemCode"]
+                    name = item["itemName"]
+                    price = int(quote["currentPrice"])
+                    change_rate = float(quote["changeRate"])
+                    sort_value = float(quote[sort_field])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not math.isfinite(change_rate) or not math.isfinite(sort_value):
+                    continue
+                if (ranking == "rising" and change_rate <= 0) or (ranking == "falling" and change_rate >= 0):
+                    continue
+                stocks[ticker] = (sort_value, {
+                    "ticker": ticker,
+                    "name": name,
+                    "price": price,
+                    "change_rate": round(change_rate, 2),
+                })
+            if not page["hasNext"] or len(stocks) == previous_count:
+                break
+            params["index"] += len(items)
+        return list(stocks.values())
+
+    try:
+        with httpx.Client(headers=headers, timeout=5) as client:
+            if market == "ALL":
+                # 네이버의 기본 조회는 코스피·코스닥만 포함한다.
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    main_markets, konex = pool.map(fetch_market, (None, "KONEX"))
+                stocks = main_markets + konex
+            else:
+                stocks = fetch_market(market)
+    except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(503, "주식 데이터를 가져올 수 없습니다.") from exc
+
+    stocks.sort(key=lambda entry: entry[0], reverse=ranking != "falling")
+    return [{"rank": rank, **stock} for rank, (_, stock) in enumerate(stocks[:limit], 1)]
+
+
 @app.get("/stocks/ranking")
 def get_stock_ranking(
     type: str = Query("amount"),   # amount | volume | rising | falling
     market: str = Query("ALL"),    # ALL | KOSPI | KOSDAQ
     limit: int = Query(20),
 ):
-    def fetch():
-        df = _get_listing(market)
-        if df.empty:
-            raise HTTPException(503, "주식 데이터를 가져올 수 없습니다.")
-
-        if type == "volume":
-            sorted_df = df.sort_values("Volume", ascending=False)
-        elif type == "rising":
-            sorted_df = df[df["ChgRatio"] > 0].sort_values("ChgRatio", ascending=False)
-        elif type == "falling":
-            sorted_df = df[df["ChgRatio"] < 0].sort_values("ChgRatio")
-        else:
-            sorted_df = df.sort_values("Amount", ascending=False)
-
-        top = sorted_df.head(limit)
-        if top.empty:
-            return []
-
-        result = []
-        for rank, (_, row) in enumerate(top.iterrows(), 1):
-            result.append({
-                "rank": rank,
-                "ticker": str(row.get("Symbol", row.get("Code", ""))),
-                "name": str(row.get("Name", "")),
-                "price": int(row["Close"]) if pd.notna(row.get("Close")) else 0,
-                "change_rate": round(float(row["ChgRatio"]), 2) if pd.notna(row.get("ChgRatio")) else 0.0,
-            })
-        return result
-
-    return _get_cached(f"ranking_{type}_{market}", fetch)
+    ranking = type if type in _KR_RANKING_SORTS else "amount"
+    market = market if market in {"KOSPI", "KOSDAQ"} else "ALL"
+    return _get_cached(
+        f"ranking_{ranking}_{market}_{limit}",
+        lambda: _fetch_stock_ranking(ranking, market, limit),
+    )
 
 
 @app.get("/sectors")
@@ -2020,6 +2073,7 @@ def get_kr_theme_stocks(no: str = Query(...), limit: int = Query(10)):
             "Referer": f"https://stock.naver.com/market/stock/kr/theme/{no}",
         }
         result = {}
+        awaiting_change_rates = False
         cursors = set()
         params = {}
         try:
@@ -2032,8 +2086,13 @@ def get_kr_theme_stocks(no: str = Query(...), limit: int = Query(10)):
                         try:
                             ticker = str(row["itemCode"])
                             name = str(row["itemName"])
-                            price = int(row["krx"]["currentPrice"])
-                            change_rate = float(row["krx"]["changeRate"])
+                            quote = row["krx"]
+                            price = int(quote["currentPrice"])
+                            raw_change_rate = quote["changeRate"]
+                            if raw_change_rate is None:
+                                awaiting_change_rates = True
+                                continue
+                            change_rate = float(raw_change_rate)
                         except (KeyError, TypeError, ValueError):
                             continue
                         if math.isfinite(change_rate):
@@ -2055,7 +2114,7 @@ def get_kr_theme_stocks(no: str = Query(...), limit: int = Query(10)):
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
             raise HTTPException(503, "국내 테마 순위를 가져올 수 없습니다.") from exc
 
-        if not result:
+        if not result and not awaiting_change_rates:
             raise HTTPException(503, "국내 테마 순위를 가져올 수 없습니다.")
 
         ranked = sorted(result.values(), key=lambda item: item["change_rate"], reverse=True)
