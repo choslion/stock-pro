@@ -1,5 +1,16 @@
 // ── 공통 ─────────────────────────────────────────────────────────────────────
 
+export interface StockPick {
+  ticker: string;
+  name: string;
+  market: "KR" | "US";
+}
+
+export interface SearchResultItem extends StockPick {
+  price?: number;
+  change_rate: number;
+}
+
 export interface IndexData {
   value: number;
   change: number;

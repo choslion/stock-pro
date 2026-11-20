@@ -15,7 +15,7 @@ export function useDialogFocus(panelRef: RefObject<HTMLElement | null>, enabled 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     return () => {
-      if (opener?.isConnected) opener.focus();
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, []);
 

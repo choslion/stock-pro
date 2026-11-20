@@ -1,22 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createChart, BaselineSeries, LineStyle } from "lightweight-charts";
-import axiosInstance from "../lib/axiosInstance";
 import { Q, fetchers } from "../lib/queries";
 import { computeWhatIf, formatKrw, chickenCount } from "../lib/whatIf";
-import type { ChartPoint } from "../types/api";
+import { useStockSearch } from "../lib/useStockSearch";
+import type { ChartPoint, StockPick } from "../types/api";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
 import ErrorBlock from "./ui/ErrorBlock";
 import parseError from "../lib/parseError";
 import { ClockFaceIcon, MagnifyingGlassIcon, XMarkIcon } from "./ui/Icons";
 import { useToastStore } from "../store/useToastStore";
-
-export interface StockPick {
-  ticker: string;
-  name:   string;
-  market: "KR" | "US";
-}
 
 const PRESET_STOCKS: StockPick[] = [
   { ticker: "005930", name: "삼성전자",   market: "KR" },
@@ -123,23 +117,8 @@ function ValueChart({ series, baseValue }: { series: ChartPoint[]; baseValue: nu
 
 /* ── 종목 검색 (인라인) ── */
 function StockSearch({ onSelect }: { onSelect: (s: StockPick) => void }) {
-  const [query, setQuery]     = useState("");
-  const [results, setResults] = useState<StockPick[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) { setResults([]); return; }
-    const timer = setTimeout(() => {
-      setLoading(true);
-      axiosInstance
-        .get<{ items: Array<StockPick & { price?: number; change_rate: number }> }>("/search", { params: { q } })
-        .then((res) => setResults((res.data.items ?? []).slice(0, 6)))
-        .catch(() => setResults([]))
-        .finally(() => setLoading(false));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [query]);
+  const [query, setQuery] = useState("");
+  const { canSearch, loading, failed, results } = useStockSearch(query);
 
   return (
     <div className="relative">
@@ -150,7 +129,7 @@ function StockSearch({ onSelect }: { onSelect: (s: StockPick) => void }) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="다른 종목 검색 (예: 카카오, MSFT)"
           aria-label="타임머신 종목 검색"
-          className="flex-1 bg-transparent text-xs text-white placeholder-gray-600 outline-none"
+          className="min-w-0 flex-1 bg-transparent text-xs text-white placeholder-gray-600 outline-none"
         />
         {query && (
           <button
@@ -162,13 +141,16 @@ function StockSearch({ onSelect }: { onSelect: (s: StockPick) => void }) {
           </button>
         )}
       </div>
-      {query.trim().length >= 2 && (
-        <div className="absolute z-10 mt-1 w-full rounded-lg bg-gray-900 border border-gray-700/80 shadow-xl overflow-hidden">
+      {canSearch && (
+        <div className="absolute z-10 mt-1 w-full rounded-lg bg-gray-900 border border-gray-700/80 shadow-xl overflow-hidden" aria-live="polite">
           {loading && <div className="flex justify-center py-3"><Spin /></div>}
-          {!loading && results.length === 0 && (
+          {failed && (
+            <p className="text-center text-gray-400 text-xs py-3">검색에 실패했어요. 잠시 후 다시 검색해 주세요.</p>
+          )}
+          {!loading && !failed && results.length === 0 && (
             <p className="text-center text-gray-500 text-xs py-3">검색 결과가 없습니다</p>
           )}
-          {!loading && results.map((item) => (
+          {results.slice(0, 6).map((item) => (
             <button
               key={`${item.market}-${item.ticker}`}
               onClick={() => { onSelect(item); setQuery(""); }}
@@ -226,31 +208,32 @@ export default function TimeMachine({ onBack, initialStock }: TimeMachineProps) 
     staleTime: 5 * 60 * 1000,
   });
 
+  const fxItems = stock.market === "US" ? fxQ.data?.items : undefined;
+  const result = useMemo(
+    () => {
+      if (!stockQ.data?.items || !amountValid || (stock.market === "US" && !fxItems)) return null;
+      return computeWhatIf(stockQ.data.items, amount, { fxItems });
+    },
+    [stockQ.data, stock.market, fxItems, amount, amountValid],
+  );
+
   const benchmarkTicker = stock.market === "KR" ? "^KS11" : "^GSPC";
   const benchmarkLabel  = stock.market === "KR" ? "KOSPI" : "S&P 500";
+  const buyDate = result?.buyDate;
+  const lastDate = result?.lastDate;
   const benchmarkQ = useQuery({
-    queryKey: Q.chart(benchmarkTicker, "US", apiPeriod, startDate),
-    queryFn:  () => fetchers.chart(benchmarkTicker, "US", apiPeriod, startDate),
+    queryKey: Q.chart(benchmarkTicker, "US", apiPeriod, buyDate, lastDate),
+    queryFn:  () => fetchers.chart(benchmarkTicker, "US", apiPeriod, buyDate, lastDate),
+    enabled: Boolean(result),
     staleTime: 5 * 60 * 1000,
   });
 
-  const result = useMemo(
-    () => (stockQ.data?.items && amountValid
-      ? computeWhatIf(stockQ.data.items, amount, {
-          fxItems: stock.market === "US" ? fxQ.data?.items : undefined,
-        })
-      : null),
-    [stockQ.data, fxQ.data, stock.market, amount, amountValid],
-  );
-
-  const benchmarkResult = useMemo(
-    () => (benchmarkQ.data?.items && amountValid
-      ? computeWhatIf(benchmarkQ.data.items, amount, {
-          fxItems: stock.market === "US" ? fxQ.data?.items : undefined,
-        })
-      : null),
-    [benchmarkQ.data, fxQ.data, stock.market, amount, amountValid],
-  );
+  const benchmarkResult = useMemo(() => {
+    if (!buyDate || !lastDate || !benchmarkQ.data?.items) return null;
+    const items = benchmarkQ.data.items.filter(({ time }) => time >= buyDate && time <= lastDate);
+    const comparison = computeWhatIf(items, amount, { fxItems });
+    return comparison?.buyDate === buyDate && comparison.lastDate === lastDate ? comparison : null;
+  }, [benchmarkQ.data, buyDate, lastDate, amount, fxItems]);
 
   const periodLabel = period === "custom"
     ? `${startDate}부터`
@@ -284,7 +267,7 @@ export default function TimeMachine({ onBack, initialStock }: TimeMachineProps) 
   const retryAll = () => {
     stockQ.refetch();
     if (stock.market === "US") fxQ.refetch();
-    benchmarkQ.refetch();
+    if (result) benchmarkQ.refetch();
   };
   const isProfit = (result?.profit ?? 0) > 0;
   const isLoss   = (result?.profit ?? 0) < 0;

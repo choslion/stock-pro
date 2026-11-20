@@ -6,7 +6,7 @@ import parseError from "../lib/parseError";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import Spin from "./ui/Spin";
 import { ClockFaceIcon, CurrencyDollarIcon } from "./ui/Icons";
-import type { SearchResultItem } from "./SearchModal";
+import type { ChartPoint, SearchResultItem } from "../types/api";
 
 function SparkleIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -106,37 +106,38 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf, 
 
   /* ── 데이터 로드 ── */
   useEffect(() => {
-    if (!seriesRef.current) return;
+    const series = seriesRef.current;
+    const chart = chartRef.current;
+    if (!series || !chart) return;
+    const controller = new AbortController();
     setLoading(true);
     setError(false);
 
     axiosInstance
-      .get<{ items: Array<{ time: string; value: number }> }>("/chart", {
+      .get<{ items: ChartPoint[] }>("/chart", {
         params: { ticker: stock.ticker, market: stock.market, period },
+        signal: controller.signal,
+        suppressErrorToast: true,
       })
       .then((res) => {
-        const items = res.data.items ?? [];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        seriesRef.current!.setData(items as any);
-        chartRef.current!.timeScale().fitContent();
+        if (controller.signal.aborted) return;
+        series.setData(res.data.items ?? []);
+        chart.timeScale().fitContent();
       })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, [stock.ticker, stock.market, period]);
+      .catch(() => { if (!controller.signal.aborted) setError(true); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [stock.ticker, stock.market, period, lineColor]);
 
   /* ── 초점 트랩 + 닫힐 때 열었던 요소로 복귀 ── */
   useDialogFocus(panelRef);
-  useEffect(() => { panelRef.current?.focus(); }, []);
+  useEffect(() => { panelRef.current?.focus({ preventScroll: true }); }, []);
 
   /* ── ESC 닫기 ── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onBack(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onBack]);
-
-  const handleOverlay = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onBack();
   }, [onBack]);
 
   const handleAiAnalysis = useCallback(() => {
@@ -157,21 +158,21 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf, 
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-start justify-center pt-10 px-4"
+      className="fixed inset-0 flex items-start justify-center overflow-hidden overscroll-none bg-black/70 backdrop-blur-sm px-4 pt-10 pb-4"
       style={{ zIndex: 60 }}
-      onClick={handleOverlay}
     >
+      <div className="absolute inset-0 touch-none" onClick={onBack} aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={`${stock.name} 차트 상세`}
         tabIndex={-1}
-        className="w-full max-w-lg bg-gray-900 border border-gray-700/80 rounded-2xl shadow-2xl overflow-hidden outline-none"
+        className="relative w-full max-w-lg max-h-full overflow-y-auto overscroll-contain scroll-pt-16 bg-gray-900 border border-gray-700/80 rounded-2xl shadow-2xl outline-none [color-scheme:dark] [scrollbar-gutter:stable] [scrollbar-width:thin]"
         style={{ animation: "slideDown 0.18s ease-out" }}
       >
         {/* 헤더 */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-700/60">
+        <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3.5 border-b border-gray-700/60 bg-gray-900">
           <button
             onClick={onBack}
             className="text-gray-400 hover:text-white transition-colors"
@@ -253,6 +254,7 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf, 
           <div className={`grid gap-2 ${onOpenWhatIf ? "grid-cols-2" : "grid-cols-1"}`}>
             <button
               onClick={handleAiAnalysis}
+              disabled={aiLoading}
               className="flex items-center justify-center gap-1.5 py-2 rounded-xl
                          bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20
                          text-blue-300 text-xs font-medium transition-colors"
@@ -284,7 +286,7 @@ export default function StockChartModal({ stock, onBack, onClose, onOpenWhatIf, 
               ) : aiError ? (
                 <p className="text-xs text-amber-300/90 leading-relaxed whitespace-pre-wrap" role="alert">{aiError}</p>
               ) : (
-                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{aiText}</p>
+                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{aiText}</p>
               )}
             </div>
           )}

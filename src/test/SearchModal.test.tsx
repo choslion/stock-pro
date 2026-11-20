@@ -1,4 +1,5 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { StrictMode, useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import axiosInstance from '../lib/axiosInstance'
 import SearchModal from '../components/SearchModal'
@@ -76,6 +77,65 @@ describe('SearchModal', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('검색을 닫으면 StrictMode에서도 검색을 열었던 버튼으로 초점을 돌린다', async () => {
+    function SearchLauncher() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>종목 검색 열기</button>
+          {open && <SearchModal onClose={() => setOpen(false)} />}
+        </>
+      )
+    }
+
+    renderWithQuery(<StrictMode><SearchLauncher /></StrictMode>)
+    const opener = screen.getByRole('button', { name: '종목 검색 열기' })
+    await userEvent.click(opener)
+    expect(screen.getByRole('textbox')).toHaveFocus()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(opener).toHaveFocus()
+  })
+
+  it('검색을 열기 전의 스크롤 위치를 닫을 때 복원한다', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    vi.stubGlobal('scrollY', 400)
+    try {
+      const { unmount } = renderWithQuery(<SearchModal onClose={vi.fn()} />)
+      expect(document.body.style.top).toBe('-400px')
+
+      vi.stubGlobal('scrollY', 0)
+      unmount()
+      expect(scrollTo).toHaveBeenCalledWith({ left: 0, top: 400, behavior: 'instant' })
+    } finally {
+      vi.unstubAllGlobals()
+      scrollTo.mockRestore()
+    }
+  })
+
+  it('검색어를 바꾸면 먼저 보낸 요청이 늦게 도착해도 최신 결과를 유지한다', async () => {
+    const apiResponse = (ticker: string, name: string) => ({
+      data: { items: [{ ticker, name, market: 'US', change_rate: 0 }] },
+    })
+    let signal: AbortSignal | undefined
+    let resolvePrevious!: (response: ReturnType<typeof apiResponse>) => void
+    mockGet.mockImplementationOnce((_url, config) => {
+      signal = config?.signal as AbortSignal
+      return new Promise((resolve) => { resolvePrevious = resolve })
+    }).mockResolvedValue(apiResponse('MSFT', '마이크로소프트'))
+
+    renderWithQuery(<SearchModal onClose={vi.fn()} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'AAPL' } })
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1))
+    fireEvent.change(input, { target: { value: 'MSFT' } })
+    expect(signal?.aborted).toBe(true)
+    expect(await screen.findByText('마이크로소프트')).toBeInTheDocument()
+    await act(async () => resolvePrevious(apiResponse('AAPL', '애플')))
+    expect(screen.getByText('마이크로소프트')).toBeInTheDocument()
+    expect(screen.queryByText('애플')).not.toBeInTheDocument()
+  })
+
   it('결과 클릭 시 차트 모달이 열린다', async () => {
     mockGet
       .mockResolvedValueOnce({
@@ -117,7 +177,7 @@ describe('SearchModal', () => {
     expect(onOpenPaperTrade).toHaveBeenCalledWith(expect.objectContaining({ ticker: '005930' }))
   })
 
-  it('차트 모달이 열려 있을 때 ESC는 검색으로만 돌아가고 전체를 닫지 않는다', async () => {
+  it('차트를 닫고 검색 결과로 돌아와도 배경은 검색을 닫을 때까지 고정한다', async () => {
     const onClose = vi.fn()
     mockGet
       .mockResolvedValueOnce({
@@ -129,7 +189,12 @@ describe('SearchModal', () => {
       })
       .mockResolvedValue({ data: { items: [] } })
 
-    renderWithQuery(<SearchModal onClose={onClose} />)
+    const root = document.documentElement
+    const previousOverflow = root.style.overflow
+    const previousPosition = document.body.style.position
+    const { unmount } = renderWithQuery(<SearchModal onClose={onClose} />)
+    expect(root.style.overflow).toBe('hidden')
+    expect(document.body.style.position).toBe('fixed')
     await userEvent.type(screen.getByRole('textbox'), 'AAPL')
     await waitFor(() => expect(screen.getByText('Apple Inc.')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Apple Inc.'))
@@ -139,5 +204,11 @@ describe('SearchModal', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.queryByLabelText('검색으로 돌아가기')).not.toBeInTheDocument()
     expect(screen.getByRole('textbox')).toBeInTheDocument()
+    expect(root.style.overflow).toBe('hidden')
+    expect(document.body.style.position).toBe('fixed')
+
+    unmount()
+    expect(root.style.overflow).toBe(previousOverflow)
+    expect(document.body.style.position).toBe(previousPosition)
   })
 })

@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useState } from "react";
+import React, { lazy, Suspense, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 const MotionDiv = motion.div;
 const TAB_ANIM = {
@@ -15,7 +15,7 @@ import Forex from "./Forex";
 import EtfList from "./EtfList";
 import { ChartBarIcon, ActivityIcon, GridIcon, TrendingUpIcon, CurrencyDollarIcon } from "./ui/Icons";
 import { ClockFaceIcon } from "./ui/Icons";
-import type { StockPick } from "./TimeMachine";
+import type { StockPick } from "../types/api";
 
 const TimeMachine = lazy(() => import("./TimeMachine"));
 
@@ -37,27 +37,24 @@ const TABS: TabDef[] = [
   { id: "forex",       label: "환율",         title: "환율",         subtitle: "주요 통화 환율",               icon: CurrencyDollarIcon },
 ];
 
-interface MarketTrendsProps {
-  initialWhatIfStock?: StockPick | null;
+export interface MarketTrendsProps {
+  whatIf: { id: number; stock?: StockPick } | null;
+  onOpenWhatIf: () => void;
+  onCloseWhatIf: () => void;
 }
 
-export default function MarketTrends({ initialWhatIfStock }: MarketTrendsProps) {
+export default function MarketTrends({ whatIf, onOpenWhatIf, onCloseWhatIf }: MarketTrendsProps) {
   const [activeTab, setActiveTab] = useState<TabId>("ranking");
-  const [showTimeMachine, setShowTimeMachine] = useState(Boolean(initialWhatIfStock));
-
-  useEffect(() => {
-    if (initialWhatIfStock) setShowTimeMachine(true);
-  }, [initialWhatIfStock]);
 
   const current = TABS.find((t) => t.id === activeTab)!;
 
-  if (showTimeMachine) {
+  if (whatIf) {
     return (
       <Suspense fallback={null}>
         <TimeMachine
-          key={initialWhatIfStock ? `${initialWhatIfStock.market}-${initialWhatIfStock.ticker}` : "default"}
-          initialStock={initialWhatIfStock ?? undefined}
-          onBack={() => setShowTimeMachine(false)}
+          key={whatIf.id}
+          initialStock={whatIf.stock}
+          onBack={onCloseWhatIf}
         />
       </Suspense>
     );
@@ -66,7 +63,7 @@ export default function MarketTrends({ initialWhatIfStock }: MarketTrendsProps) 
   return (
     <div>
       <button
-        onClick={() => setShowTimeMachine(true)}
+        onClick={onOpenWhatIf}
         className="w-full mb-5 flex items-center gap-3 rounded-2xl border border-blue-500/20
                    bg-gradient-to-r from-blue-950/50 to-slate-900/60 px-4 py-3.5
                    text-left hover:border-blue-400/40 hover:bg-blue-950/60 transition-colors"

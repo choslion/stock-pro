@@ -12,7 +12,7 @@ import {
 import { usePortfolioStore } from "../store/usePortfolioStore";
 import { useToastStore } from "../store/useToastStore";
 import { useDialogFocus } from "../lib/useDialogFocus";
-import type { SearchResultItem } from "./SearchModal";
+import type { SearchResultItem } from "../types/api";
 import Spin from "./ui/Spin";
 import { CurrencyDollarIcon, XMarkIcon } from "./ui/Icons";
 

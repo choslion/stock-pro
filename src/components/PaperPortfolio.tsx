@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEventHandler } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchers, Q } from "../lib/queries";
 import {
@@ -11,7 +11,7 @@ import {
 } from "../lib/portfolio";
 import { usePortfolioStore } from "../store/usePortfolioStore";
 import { useWatchlistStore } from "../store/useWatchlistStore";
-import type { SearchResultItem } from "./SearchModal";
+import type { SearchResultItem } from "../types/api";
 import PaperTradeSheet from "./PaperTradeSheet";
 import Card from "./ui/Card";
 import Spin from "./ui/Spin";
@@ -25,7 +25,7 @@ import {
 } from "./ui/Icons";
 
 interface PaperPortfolioProps {
-  onOpenSearch: () => void;
+  onOpenSearch: MouseEventHandler<HTMLButtonElement>;
 }
 
 type TradeTarget = { stock: SearchResultItem; side: TradeSide };

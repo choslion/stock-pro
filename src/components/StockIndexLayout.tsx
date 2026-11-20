@@ -11,7 +11,8 @@ const AIChatSection   = lazy(() => import("./AIChatSection"));
 import SearchModal from "./SearchModal";
 import PaperTradeSheet from "./PaperTradeSheet";
 import MarketAlertBanner from "./MarketAlertBanner";
-import type { SearchResultItem } from "./SearchModal";
+import type { SearchResultItem, StockPick } from "../types/api";
+import type { MarketTrendsProps } from "./MarketTrends";
 import { ChartBarIcon, TrendingUpIcon, NewspaperIcon, CurrencyDollarIcon, BookOpenIcon, MagnifyingGlassIcon, SparklesIcon, QuestionMarkCircleIcon, XMarkIcon } from "./ui/Icons";
 import { Q, fetchers } from "../lib/queries";
 import { useDialogFocus } from "../lib/useDialogFocus";
@@ -42,19 +43,18 @@ const TAB_ANIM = {
 
 function SectionContent({
   activeTab,
-  initialWhatIfStock,
   onOpenSearch,
-}: {
+  ...marketTrendsProps
+}: MarketTrendsProps & {
   activeTab: TabId;
-  initialWhatIfStock: SearchResultItem | null;
-  onOpenSearch: () => void;
+  onOpenSearch: React.MouseEventHandler<HTMLButtonElement>;
 }) {
   return (
     <Suspense fallback={null}>
       <AnimatePresence mode="wait">
         <MotionDiv key={activeTab} {...TAB_ANIM}>
           {activeTab === "market"    && <MarketDashboard />}
-          {activeTab === "chart"     && <MarketTrends initialWhatIfStock={initialWhatIfStock} />}
+          {activeTab === "chart"     && <MarketTrends {...marketTrendsProps} />}
           {activeTab === "news"      && <NewsSection />}
           {activeTab === "portfolio" && <PaperPortfolio onOpenSearch={onOpenSearch} />}
           {activeTab === "ai"        && <AIChatSection />}
@@ -146,7 +146,7 @@ export default function StockIndexDashboard() {
   const [activeTab, setActiveTab]   = useState<TabId>("market");
   const [showSearch, setShowSearch] = useState(false);
   const [showHelp, setShowHelp]     = useState(false);
-  const [whatIfStock, setWhatIfStock] = useState<SearchResultItem | null>(null);
+  const [whatIf, setWhatIf] = useState<MarketTrendsProps["whatIf"]>(null);
   const [paperTradeStock, setPaperTradeStock] = useState<SearchResultItem | null>(null);
   const queryClient = useQueryClient();
 
@@ -177,15 +177,37 @@ export default function StockIndexDashboard() {
     return () => clearTimeout(timer);
   }, [queryClient]);
 
+  const selectTab = (tab: TabId) => {
+    if (tab !== "chart") setWhatIf(null);
+    setActiveTab(tab);
+  };
+
+  const openWhatIf = (stock?: StockPick) => {
+    setWhatIf((current) => ({ id: (current?.id ?? 0) + 1, stock }));
+  };
+
+  const openSearch: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+    event.currentTarget.focus({ preventScroll: true });
+    setShowSearch(true);
+  };
+
+  const sectionProps = {
+    activeTab,
+    whatIf,
+    onOpenWhatIf: () => openWhatIf(),
+    onCloseWhatIf: () => setWhatIf(null),
+    onOpenSearch: openSearch,
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       {showSearch && (
         <SearchModal
           onClose={() => setShowSearch(false)}
           onOpenWhatIf={(stock) => {
-            setWhatIfStock(stock);
+            openWhatIf(stock);
             setShowSearch(false);
-            setActiveTab("chart");
+            selectTab("chart");
           }}
           onOpenPaperTrade={(stock) => {
             setPaperTradeStock(stock);
@@ -197,7 +219,7 @@ export default function StockIndexDashboard() {
         <PaperTradeSheet
           stock={paperTradeStock}
           onClose={() => setPaperTradeStock(null)}
-          onCompleted={() => setActiveTab("portfolio")}
+          onCompleted={() => selectTab("portfolio")}
         />
       )}
       <AnimatePresence>
@@ -220,7 +242,7 @@ export default function StockIndexDashboard() {
             </div>
             <p className="text-[11px] text-gray-500 mt-0.5 pl-6">실시간 시장 데이터</p>
             <button
-              onClick={() => setShowSearch(true)}
+              onClick={openSearch}
               className="mt-3 w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg
                          bg-gray-800/60 hover:bg-gray-700/60 transition-colors text-gray-500 hover:text-gray-300"
             >
@@ -237,7 +259,7 @@ export default function StockIndexDashboard() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => selectTab(tab.id)}
                   aria-current={isActive ? "page" : undefined}
                   className={`w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-lg
                               transition-all duration-150
@@ -275,7 +297,7 @@ export default function StockIndexDashboard() {
         <main className="flex-1 overflow-y-auto">
           <div className="p-6 xl:p-10">
             <div className="max-w-3xl mx-auto">
-              <SectionContent activeTab={activeTab} initialWhatIfStock={whatIfStock} onOpenSearch={() => setShowSearch(true)} />
+              <SectionContent {...sectionProps} />
             </div>
           </div>
         </main>
@@ -300,7 +322,7 @@ export default function StockIndexDashboard() {
                 <QuestionMarkCircleIcon className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setShowSearch(true)}
+                onClick={openSearch}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors"
                 aria-label="종목 검색"
               >
@@ -312,7 +334,7 @@ export default function StockIndexDashboard() {
 
         {/* 컨텐츠 */}
         <main className="p-4 pb-20 space-y-6">
-          <SectionContent activeTab={activeTab} initialWhatIfStock={whatIfStock} onOpenSearch={() => setShowSearch(true)} />
+          <SectionContent {...sectionProps} />
         </main>
 
         {/* 하단 탭바 */}
@@ -329,7 +351,7 @@ export default function StockIndexDashboard() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => selectTab(tab.id)}
                 aria-current={isActive ? "page" : undefined}
                 className={`relative flex-1 flex flex-col items-center pt-2 pb-4 gap-1
                             transition-all duration-200

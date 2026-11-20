@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import axiosInstance from "../lib/axiosInstance";
+import { useState, useEffect, useRef } from "react";
 import Spin from "./ui/Spin";
 import StockChartModal from "./StockChartModal";
 import { MagnifyingGlassIcon, XMarkIcon, StarIcon, StarSolidIcon } from "./ui/Icons";
@@ -7,19 +6,8 @@ import { useWatchlistStore } from "../store/useWatchlistStore";
 import { useToastStore } from "../store/useToastStore";
 
 import { useDialogFocus } from "../lib/useDialogFocus";
-
-export interface SearchResultItem {
-  ticker:      string;
-  name:        string;
-  market:      "KR" | "US";
-  price?:      number;
-  change_rate: number;
-}
-
-function isSearchableQuery(value: string) {
-  const query = value.trim();
-  return query.length >= 2 || /^[a-z]$/i.test(query);
-}
+import { useStockSearch } from "../lib/useStockSearch";
+import type { SearchResultItem } from "../types/api";
 
 interface ResultItemProps {
   item:    SearchResultItem;
@@ -90,18 +78,48 @@ interface SearchModalProps {
 
 export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }: SearchModalProps) {
   const [query, setQuery]                   = useState("");
-  const [results, setResults]               = useState<SearchResultItem[]>([]);
-  const [loading, setLoading]               = useState(false);
-  const [searched, setSearched]             = useState(false);
   const [selectedStock, setSelectedStock]   = useState<SearchResultItem | null>(null);
+  const { canSearch, loading, failed, results } = useStockSearch(query);
   const inputRef  = useRef<HTMLInputElement>(null);
   const panelRef  = useRef<HTMLDivElement>(null);
 
-  /* ── 오토포커스 ── */
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
   /* ── 포커스 트랩 + 닫힐 때 초점 복귀 (위에 차트 모달이 열리면 트랩 양보) ── */
   useDialogFocus(panelRef, !selectedStock);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    const { scrollX, scrollY } = window;
+    const previousRootStyles = {
+      overflow: root.style.overflow,
+      overscrollBehavior: root.style.overscrollBehavior,
+    };
+    const previousBodyStyles = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      width: body.style.width,
+      paddingRight: body.style.paddingRight,
+    };
+    const scrollbarWidth = window.innerWidth - root.clientWidth;
+    if (scrollbarWidth > 0) {
+      const padding = getComputedStyle(body).paddingRight;
+      body.style.paddingRight = `calc(${padding} + ${scrollbarWidth}px)`;
+    }
+
+    // Freeze the page at its current position, including on mobile browsers.
+    Object.assign(root.style, { overflow: "hidden", overscrollBehavior: "none" });
+    Object.assign(body.style, { position: "fixed", top: `${-scrollY}px`, left: `${-scrollX}px`, width: "100%" });
+    inputRef.current?.focus({ preventScroll: true });
+
+    return () => {
+      Object.assign(root.style, previousRootStyles);
+      Object.assign(body.style, previousBodyStyles);
+      if (window.scrollX !== scrollX || window.scrollY !== scrollY) {
+        window.scrollTo({ left: scrollX, top: scrollY, behavior: "instant" });
+      }
+    };
+  }, []);
 
   /* ── 모달 밖 pointerdown으로 초점이 빠져나가는 것 방지 ── */
   useEffect(() => {
@@ -122,64 +140,22 @@ export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }:
     return () => window.removeEventListener("keydown", handler);
   }, [onClose, selectedStock]);
 
-  /* ── 검색 (400ms 디바운스) ── */
-  useEffect(() => {
-    const q = query.trim();
-    if (!isSearchableQuery(q)) {
-      setResults([]);
-      setSearched(false);
-      setLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      setLoading(true);
-      axiosInstance
-        .get<{ items: SearchResultItem[] }>("/search", {
-          params: { q },
-          signal: controller.signal,
-        })
-        .then((res) => { setResults(res.data.items ?? []); setSearched(true); })
-        .catch((error) => {
-          if (error?.code !== "ERR_CANCELED") {
-            setResults([]);
-            setSearched(true);
-          }
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setLoading(false);
-        });
-    }, 400);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query]);
-
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
-
   return (
     <>
     {/* 딤 오버레이 */}
-    <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-14 px-4"
-      onClick={handleOverlayClick}
-      tabIndex={-1}
-      aria-hidden="false"
-    >
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden overscroll-none bg-black/60 backdrop-blur-sm px-4 pt-14 pb-4">
+      <div className="absolute inset-0 touch-none" onClick={onClose} aria-hidden="true" />
       {/* 모달 패널 */}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="종목 검색"
-        className="w-full max-w-md bg-gray-900 border border-gray-700/80 rounded-2xl shadow-2xl overflow-hidden"
+        className="relative flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl border border-gray-700/80 bg-gray-900 shadow-2xl"
         style={{ animation: "slideDown 0.18s ease-out" }}
       >
         {/* 검색 입력 */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-700/60">
+        <div className="flex shrink-0 items-center gap-3 px-4 py-3.5 border-b border-gray-700/60">
           <MagnifyingGlassIcon className="w-4 h-4 shrink-0 text-gray-500" aria-hidden="true" />
           <input
             ref={inputRef}
@@ -187,11 +163,11 @@ export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }:
             onChange={(e) => setQuery(e.target.value)}
             placeholder="종목명 또는 티커 (예: 삼성전자, 엔비디아, AAPL)"
             aria-label="종목 검색어 입력"
-            className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 outline-none"
+            className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder-gray-600 outline-none"
           />
           {query ? (
             <button
-              onClick={() => { setQuery(""); inputRef.current?.focus(); }}
+              onClick={() => { setQuery(""); inputRef.current?.focus({ preventScroll: true }); }}
               aria-label="검색어 지우기"
               className="text-gray-500 hover:text-gray-300 transition-colors"
             >
@@ -209,18 +185,21 @@ export default function SearchModal({ onClose, onOpenWhatIf, onOpenPaperTrade }:
         </div>
 
         {/* 결과 */}
-        <div className="max-h-[60vh] overflow-y-auto" role="region" aria-label="검색 결과" aria-live="polite">
+        <div className="min-h-0 max-h-[60vh] overflow-y-auto overscroll-contain [color-scheme:dark] [scrollbar-width:thin]" role="region" aria-label="검색 결과" aria-live="polite">
           {loading && <div className="flex justify-center py-8"><Spin /></div>}
 
-          {!loading && !isSearchableQuery(query) && (
+          {!canSearch && (
             <p className="text-center text-gray-500 text-xs py-8">
               2글자 이상 또는 1글자 티커를 입력해 주세요
             </p>
           )}
-          {!loading && searched && results.length === 0 && (
+          {failed && (
+            <p className="text-center text-gray-400 text-sm py-8">검색에 실패했어요. 잠시 후 다시 검색해 주세요.</p>
+          )}
+          {canSearch && !loading && !failed && results.length === 0 && (
             <p className="text-center text-gray-500 text-sm py-8">검색 결과가 없습니다</p>
           )}
-          {!loading && results.map((item) => (
+          {results.map((item) => (
             <ResultItem key={`${item.market}-${item.ticker}`} item={item} onClick={() => setSelectedStock(item)} />
           ))}
         </div>
